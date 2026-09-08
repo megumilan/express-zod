@@ -1,0 +1,17 @@
+{
+    "exclude": ["node_modules", "dist"],
+    "compilerOptions": {
+        "target": "esnext",
+        "module": "esnext",
+        "moduleResolution": "bundler",
+        "strict": true,
+        "skipLibCheck": true,
+        "verbatimModuleSyntax": true,
+        "esModuleInterop": true,
+        "exactOptionalPropertyTypes": true,
+        "types": ["node", "express"],
+        "outDir": "dist",
+        "rootDir": ".",
+        "declaration": true
+    }
+}

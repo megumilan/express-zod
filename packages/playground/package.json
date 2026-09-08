@@ -1,0 +1,13 @@
+{
+    "name": "playground",
+    "version": "1.0.0",
+    "description": "Express Zod playground",
+    "keywords": [],
+    "license": "ISC",
+    "author": "",
+    "scripts": {},
+    "dependencies": {
+        "express-zod": "workspace:*"
+    },
+    "packageManager": "pnpm@10.34.4"
+}
