@@ -9,7 +9,7 @@
         "verbatimModuleSyntax": true,
         "esModuleInterop": true,
         "exactOptionalPropertyTypes": true,
-        "types": ["node", "express"],
+        "types": ["node", "express", "zod", "type-fest"],
         "outDir": "dist",
         "rootDir": ".",
         "declaration": true

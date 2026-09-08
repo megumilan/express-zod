@@ -15,5 +15,9 @@
     "scripts": {
         "build": "tsdown"
     },
+    "peerDependencies": {
+        "express": "^5",
+        "zod": "^4"
+    },
     "packageManager": "pnpm@10.34.4"
 }

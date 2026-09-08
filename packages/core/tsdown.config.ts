@@ -5,4 +5,7 @@ export default defineConfig({
     outDir: 'dist',
     format: ['esm'],
     dts: true,
+    deps: {
+        neverBundle: ['zod', 'express'],
+    },
 })

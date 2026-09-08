@@ -1,3 +1,10 @@
-import { add } from 'express-zod'
+import { Application, Router } from 'express-zod'
 
-console.log(add(1, 2))
+const userRouter = new Router({ prefix: '/users' })
+    .post('/')
+    .get('/')
+    .get('/:id')
+
+export const app = new Application({ prefix: '/api' })
+    .use(userRouter)
+    .get('/hello')
