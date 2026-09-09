@@ -5,7 +5,11 @@
     "keywords": [],
     "license": "ISC",
     "author": "",
-    "scripts": {},
+    "type": "module",
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsx src/index.ts"
+    },
     "dependencies": {
         "express-zod": "workspace:*"
     },

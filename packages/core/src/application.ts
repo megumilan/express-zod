@@ -4,7 +4,7 @@ import express, {
     type RequestHandler,
 } from 'express'
 import type { Simplify } from 'type-fest'
-import type { TRouteRecord, TRouterOptions } from './router'
+import type { NoExtraKeys, TRouteRecord, TRouterOptions } from './router'
 import { Router } from './router'
 
 export class Application<
@@ -14,30 +14,19 @@ export class Application<
 > extends Router<Options, Routes, Routers> {
     protected _host: Express = express()
 
-    constructor(options?: Options | (TRouterOptions & {})) {
-        super(options)
-        this._host.use(express.json())
-        this._host.use(express.urlencoded({ extended: true }))
+    constructor(options?: NoExtraKeys<Options, TRouterOptions>) {
+        void super(options)
     }
 
     override use(middleware: RequestHandler | ErrorRequestHandler): this
     override use<const R extends Router>(
         router: R,
-    ): Application<
-        Options,
-        Routes,
-        [
-            ...Routers,
-            Options extends { prefix: infer Prefix extends string }
-                ? UpdateRoutesFullPath<R, Prefix>
-                : R,
-        ]
-    >
+    ): Application<Options, Routes, [...Routers, R]>
     override use(target: RequestHandler | ErrorRequestHandler | Router) {
         if (typeof target === 'function') {
             this._host.use(target)
         } else {
-            this._host.use(target.setOptions(this._options || {}).router)
+            this._host.use(target.router)
         }
         return this
     }
@@ -49,9 +38,13 @@ export class Application<
     override patch = this.registerRoute('patch')
     override head = this.registerRoute('head')
     override options = this.registerRoute('options')
+
+    get listen() {
+        return this._host.listen.bind(this._host)
+    }
 }
 
-type UpdateRoutesFullPath<R extends Router, Prefix extends string> =
+type _UpdateRoutesFullPath<R extends Router, Prefix extends string> =
     R extends Router<infer Options, infer Routes, infer Routers>
         ? Router<
               Options,

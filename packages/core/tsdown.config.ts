@@ -6,6 +6,6 @@ export default defineConfig({
     format: ['esm'],
     dts: true,
     deps: {
-        neverBundle: ['zod', 'express'],
+        neverBundle: true,
     },
 })
