@@ -1,7 +1,7 @@
 {
     "editor.defaultFormatter": "biomejs.biome",
     "editor.formatOnSave": true,
-    "prettier.enable": false,
+    "prettier.enable": true,
     "eslint.enable": false,
     "biome.enabled": true,
     "editor.codeActionsOnSave": {
@@ -34,5 +34,8 @@
     },
     "[vue]": {
         "editor.defaultFormatter": "biomejs.biome"
+    },
+    "[markdown]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
     }
 }
