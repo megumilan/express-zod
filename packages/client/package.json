@@ -1,0 +1,22 @@
+{
+    "name": "@express-zod/client",
+    "version": "1.0.0",
+    "description": "",
+    "keywords": [],
+    "license": "ISC",
+    "author": "",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.mts",
+            "default": "./dist/index.mjs"
+        }
+    },
+    "scripts": {
+        "build": "tsdown"
+    },
+    "devDependencies": {
+        "express-zod": "workspace:*"
+    },
+    "packageManager": "pnpm@10.34.4"
+}

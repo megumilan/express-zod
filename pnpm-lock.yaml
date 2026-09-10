@@ -39,6 +39,12 @@ importers:
         specifier: ^4.5.4
         version: 4.5.4
 
+  packages/client:
+    devDependencies:
+      express-zod:
+        specifier: workspace:*
+        version: link:../core
+
   packages/core:
     dependencies:
       express:
@@ -50,6 +56,9 @@ importers:
 
   packages/playground:
     dependencies:
+      '@express-zod/client':
+        specifier: workspace:*
+        version: link:../client
       express-zod:
         specifier: workspace:*
         version: link:../core

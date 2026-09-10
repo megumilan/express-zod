@@ -11,6 +11,7 @@
         "dev": "tsx src/index.ts"
     },
     "dependencies": {
+        "@express-zod/client": "workspace:*",
         "express-zod": "workspace:*"
     },
     "packageManager": "pnpm@10.34.4"

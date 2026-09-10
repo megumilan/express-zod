@@ -1,26 +1,28 @@
 import { Application, Router } from 'express-zod'
 import z from 'zod'
 
-const userRouter = new Router({ prefix: '/users' }).get(
-    '/:id',
-    {
-        query: z.object({ name: z.string().optional() }),
-        custom: { auth: true },
-        meta: { tags: ['user', 'id'] },
-        responses: {
-            200: z.object({ data: z.object({ id: z.string() }) }),
-            400: z.object({ error: z.object({ reason: z.string() }) }),
+const userRouter = new Router({ prefix: '/users' })
+    .get(
+        '/:id',
+        {
+            query: z.object({ name: z.string().optional() }),
+            custom: { auth: true },
+            meta: { tags: ['user', 'id'] },
+            responses: {
+                200: z.object({ data: z.object({ id: z.string() }) }),
+                400: z.object({ error: z.object({ reason: z.string() }) }),
+            },
         },
-    },
-    (req, res) => {
-        console.log('===> /:id')
-        void req.params.id
-        void req.headers
-        void req.cookies
-        void res.locals
-        res.status(200).json({ data: { id: '' } })
-    },
-)
+        (req, res) => {
+            console.log('===> {/:id}')
+            void req.params.id
+            void req.headers
+            void req.cookies
+            void res.locals
+            res.status(200).json({ data: { id: req.query.name || 'no' } })
+        },
+    )
+    .get('/:name', () => {})
 
 export const app = new Application({})
     .use(userRouter)

@@ -112,6 +112,11 @@ export interface TRouteOptions
     extends Partial<Except<TRouteSchema, 'params'>>,
         ExpressZod.TRouteOptions {}
 
+export interface TRouteOptionsWidthPathParams<Path extends string>
+    extends TRouteOptions {
+    params: IsMatchPathParams<Path> extends true ? PathParamsToZod<Path> : {}
+}
+
 type JoinPath<Prefix, Path extends string> = Prefix extends string
     ? Prefix extends ''
         ? Path
@@ -144,10 +149,7 @@ type GenerateRoute<
     fullPath: RouterOptions extends { prefix: infer P }
         ? JoinPath<P, Path>
         : Path
-    options: Simplify<
-        If<IsMatchPathParams<Path>, { params: PathParamsToZod<Path> }, {}> &
-            Writable<RouteOptions>
-    >
+    options: Writable<RouteOptions>
 }>
 
 type RedefinedThis<
@@ -223,8 +225,19 @@ export interface TRouteRegistrar<
         path: If<IsValidPath<Path>, Path, never>,
         options: NoExtraKeys<RouteOptions, TRouteOptions>,
         ...handlers: TRouteHandler<Path, RouteOptions>[]
-    ): RedefinedThis<This, Options, Routes, Routers, Method, Path, RouteOptions>
-    <const Path extends string, const RouteOptions extends TRouteOptions>(
+    ): RedefinedThis<
+        This,
+        Options,
+        Routes,
+        Routers,
+        Method,
+        Path,
+        RouteOptions & { params: PathParamsToZod<Path> }
+    >
+    <
+        const Path extends string,
+        const RouteOptions extends TRouteOptionsWidthPathParams<Path>,
+    >(
         path: If<IsValidPath<Path>, Path, never>,
         ...handlers:
             | [
@@ -232,7 +245,7 @@ export interface TRouteRegistrar<
                   ...TRouteHandler<Path, RouteOptions>[],
               ]
             | TRouteHandler<Path, RouteOptions>[]
-    ): RedefinedThis<This, Options, Routes, Routers, Method, Path, {}>
+    ): RedefinedThis<This, Options, Routes, Routers, Method, Path, RouteOptions>
 }
 
 type PathParams<Path extends string> =
@@ -313,7 +326,7 @@ class _Router<
             const [options, handlers] = (
                 typeof _handlers[0] === 'function'
                     ? [{}, _handlers]
-                    : [_handlers[0], _handlers.slice(1)]
+                    : [_handlers[0] || {}, _handlers.slice(1)]
             ) as [RouteOptions, RequestHandler[]]
 
             let schema = {} as Partial<TRouteSchema>
