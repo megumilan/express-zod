@@ -4,19 +4,35 @@ import z from 'zod'
 const userRouter = new Router({ prefix: '/users' }).get(
     '/:id',
     {
-        params: z.object({ id: z.string() }),
+        query: z.object({ name: z.string().optional() }),
         custom: { auth: true },
         meta: { tags: ['user', 'id'] },
+        responses: {
+            200: z.object({ data: z.object({ id: z.string() }) }),
+            400: z.object({ error: z.object({ reason: z.string() }) }),
+        },
     },
-    (_, res) => {
-        res.json(`Get User by ${_.params.id}`)
+    (req, res) => {
+        console.log('===> /:id')
+        void req.params.id
+        void req.headers
+        void req.cookies
+        void res.locals
+        res.status(200).json({ data: { id: '' } })
     },
 )
 
-export const app = new Application({ prefix: '/api' })
+export const app = new Application({})
     .use(userRouter)
     .get('/', (_, res) => {
         res.json('Hello World')
+    })
+    .get('{/:name}', (_, res) => {
+        console.log('===> {/:name}')
+        res.json({
+            from: '{/:name}',
+            name: _.params.name,
+        })
     })
 
 app.listen(3000, () => {
