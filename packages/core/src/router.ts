@@ -10,9 +10,9 @@ import {
     type RouterOptions,
 } from 'express'
 import type {
-    Except,
     If,
     IsUnknown,
+    MergeDeep,
     OmitIndexSignature,
     Simplify,
     Writable,
@@ -20,8 +20,8 @@ import type {
 import type { output, ZodObject, ZodOptional, ZodString, ZodType } from 'zod'
 import type { Application } from './application'
 import {
-    generatePathParamsSchema,
     type IsMatchPathParams,
+    inferPathParamsSchema,
     isMatchPathParams,
     schemaValidator,
 } from './schema-validator'
@@ -109,13 +109,13 @@ export interface TRouteRecord {
 }
 
 export interface TRouteOptions
-    extends Partial<Except<TRouteSchema, 'params'>>,
+    extends Partial<TRouteSchema>,
         ExpressZod.TRouteOptions {}
 
-export interface TRouteOptionsWidthPathParams<Path extends string>
-    extends TRouteOptions {
-    params: IsMatchPathParams<Path> extends true ? PathParamsToZod<Path> : {}
-}
+// export interface TRouteOptionsWidthPathParams<Path extends string>
+//     extends TRouteOptions {
+//     params: IsMatchPathParams<Path> extends true ? PathParamsToZod<Path> : {}
+// }
 
 type JoinPath<Prefix, Path extends string> = Prefix extends string
     ? Prefix extends ''
@@ -172,19 +172,25 @@ type RedefinedThis<
           Routers
       >
 
-type InferRouteSchema<Path extends string, Options extends TRouteOptions> = {
-    [K in keyof Options]: K extends 'responses'
-        ? {
-              [Status in keyof Options[K]]: output<Options[K][Status]>
-          }
-        : K extends 'headers'
-          ? If<
-                IsUnknown<output<Options[K]>>,
-                OmitIndexSignature<IncomingHttpHeaders>,
-                OmitIndexSignature<IncomingHttpHeaders> & output<Options[K]>
-            >
-          : output<Options[K]>
-} & { params: PathParams<Path> }
+type InferRouteSchema<
+    Path extends string,
+    Options extends TRouteOptions,
+> = MergeDeep<
+    { params: PathParams<Path> },
+    {
+        [K in keyof Options]: K extends 'responses'
+            ? {
+                  [Status in keyof Options[K]]: output<Options[K][Status]>
+              }
+            : K extends 'headers'
+              ? If<
+                    IsUnknown<output<Options[K]>>,
+                    OmitIndexSignature<IncomingHttpHeaders>,
+                    OmitIndexSignature<IncomingHttpHeaders> & output<Options[K]>
+                >
+              : output<Options[K]>
+    }
+>
 
 interface TRouteResponse<
     Responses extends Record<number, unknown>,
@@ -373,16 +379,19 @@ class _Router<
 
             let staticSchema = {} as Partial<TRouteSchema>
             for (const key of ROUTE_SCHEMAS) {
-                if (key === 'params') {
-                    continue
-                }
                 if (options[key]) {
                     staticSchema[key] = options[key] as never
                 }
             }
             if (isMatchPathParams(path)) {
-                const params = generatePathParamsSchema(path)
-                staticSchema = { params, ...staticSchema }
+                const { params, ...rest } = staticSchema
+                const paramsInferred = inferPathParamsSchema(path)
+                staticSchema = {
+                    params: params
+                        ? paramsInferred.extend(params.shape)
+                        : paramsInferred,
+                    ...rest,
+                }
             }
             const { responses, ...runtimeSchema } = staticSchema
             if (Object.keys(runtimeSchema).length) {
@@ -395,7 +404,6 @@ class _Router<
                 fullPath = joinPath(prefix, path)
             }
             ;(this._host as Router)[method](fullPath, ...handlers)
-            console.log('schema', staticSchema)
             this._routes.push({
                 method,
                 path,
