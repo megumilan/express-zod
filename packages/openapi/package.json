@@ -1,0 +1,25 @@
+{
+    "name": "@express-zod/openapi",
+    "version": "1.0.0",
+    "description": "Express Zod OpenAPI",
+    "keywords": [],
+    "license": "ISC",
+    "author": "",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.mts",
+            "default": "./dist/index.mjs"
+        }
+    },
+    "scripts": {
+        "build": "tsdown"
+    },
+    "dependencies": {
+        "zod-openapi": "^6.0.2"
+    },
+    "devDependencies": {
+        "express-zod": "workspace:*"
+    },
+    "packageManager": "pnpm@10.34.4"
+}

@@ -54,11 +54,24 @@ importers:
         specifier: ^4
         version: 4.5.4
 
+  packages/openapi:
+    dependencies:
+      zod-openapi:
+        specifier: ^6.0.2
+        version: 6.0.2(zod@4.5.4)
+    devDependencies:
+      express-zod:
+        specifier: workspace:*
+        version: link:../core
+
   packages/playground:
     dependencies:
       '@express-zod/client':
         specifier: workspace:*
         version: link:../client
+      '@express-zod/openapi':
+        specifier: workspace:*
+        version: link:../openapi
       express-zod:
         specifier: workspace:*
         version: link:../core
@@ -996,6 +1009,12 @@ packages:
   yuku-parser@0.9.4:
     resolution: {integrity: sha512-VWnoJzdB2g1JjsMEcB2MxSLoDbgISgOiNRsgiR0qrQKiUw2yyzEfYEYkNHSMNhdGkSo7gtmcN+2UOczzGDLAuw==}
 
+  zod-openapi@6.0.2:
+    resolution: {integrity: sha512-SwC5Ppi2ov8WimzNWP/XK95VqPyLDzxPYj10HgNPzhZH9gO7zx0sxdYL9eq7wOADHx1JddOApjhYDmMWQvnVnw==}
+    engines: {node: '>=22.14.0'}
+    peerDependencies:
+      zod: ^4.0.0
+
   zod@4.5.4:
     resolution: {integrity: sha512-sC95tT5iHHH9gtpj6A81kh+NEaRAUFN+qlUPDUbRfOMvNf5QCBqsb3WgvnpVtK5Y+4UfA6KqufotuTvMGiTlsA==}
 
@@ -1784,5 +1803,9 @@ snapshots:
       '@yuku-parser/binding-linux-x64-musl': 0.9.4
       '@yuku-parser/binding-win32-arm64': 0.9.4
       '@yuku-parser/binding-win32-x64': 0.9.4
+
+  zod-openapi@6.0.2(zod@4.5.4):
+    dependencies:
+      zod: 4.5.4
 
   zod@4.5.4: {}
