@@ -34,6 +34,7 @@ export function schemaValidator(schema: Partial<TRouteSchema>): RequestHandler {
             console.log(schema)
             for (const [key, schema] of Object.entries(schemas)) {
                 console.log('validate', key)
+                console.log('value', req[key as keyof typeof req])
                 schema.parse(req[key as keyof typeof req])
             }
             next()

@@ -185,7 +185,17 @@ function parseApiName(name: string) {
     }
 }
 
-function defineClient<App extends Application>(host: string) {
+export interface TClientOptions {
+    errorCallback?: (err: unknown) => void
+    headers?: {
+        [K: string]: string | (() => string)
+    }
+}
+
+function defineClient<App extends Application>(
+    host: string,
+    options?: TClientOptions,
+) {
     return new Proxy(
         {},
         {
@@ -245,20 +255,43 @@ function defineClient<App extends Application>(host: string) {
                         }
                     }
 
+                    const headers = new Headers()
+                    for (const [key, value] of Object.entries(
+                        options?.headers ?? {},
+                    )) {
+                        headers.set(
+                            key,
+                            typeof value === 'function' ? value() : value,
+                        )
+                    }
+
                     const body = (
                         args?.body ? JSON.stringify(args.body) : undefined
                     ) as never
+                    if (body !== undefined) {
+                        headers.set('Content-Type', 'application/json')
+                    }
 
                     console.log('url', url)
+                    console.log('headers', headers)
 
-                    const res = await fetch(url, {
-                        method,
-                        body,
-                    })
-                    if (!res.ok) {
-                        throw new Error(res.statusText)
+                    try {
+                        const res = await fetch(url, {
+                            method,
+                            body,
+                            headers,
+                        })
+                        if (!res.ok) {
+                            throw new Error(res.statusText)
+                        }
+                        return res.json()
+                    } catch (err) {
+                        if (options?.errorCallback) {
+                            options.errorCallback(err)
+                        } else {
+                            throw err
+                        }
                     }
-                    return res.json()
                 }
             },
         },

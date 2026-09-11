@@ -1,3 +1,4 @@
+import { defineClient } from '@express-zod/client'
 import { Application, Router } from 'express-zod'
 import z from 'zod'
 
@@ -37,8 +38,15 @@ export const app = new Application({})
         })
     })
 
+const client = defineClient<App>('http://localhost:3000/', {
+    headers: {
+        authorization: 'Bearer token',
+    },
+})
+
 app.listen(3000, () => {
     console.log('http://localhost:3000')
+    void client
 })
 
 export type App = typeof app

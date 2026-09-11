@@ -232,12 +232,10 @@ export interface TRouteRegistrar<
         Routers,
         Method,
         Path,
-        RouteOptions & { params: PathParamsToZod<Path> }
+        RouteOptions &
+            If<IsMatchPathParams<Path>, { params: PathParamsToZod<Path> }, {}>
     >
-    <
-        const Path extends string,
-        const RouteOptions extends TRouteOptionsWidthPathParams<Path>,
-    >(
+    <const Path extends string, const RouteOptions extends TRouteOptions = {}>(
         path: If<IsValidPath<Path>, Path, never>,
         ...handlers:
             | [
@@ -245,7 +243,41 @@ export interface TRouteRegistrar<
                   ...TRouteHandler<Path, RouteOptions>[],
               ]
             | TRouteHandler<Path, RouteOptions>[]
-    ): RedefinedThis<This, Options, Routes, Routers, Method, Path, RouteOptions>
+    ): RedefinedThis<
+        This,
+        Options,
+        Routes,
+        Routers,
+        Method,
+        Path,
+        RouteOptions &
+            If<IsMatchPathParams<Path>, { params: PathParamsToZod<Path> }, {}>
+    >
+    // <const Path extends string, const RouteOptions extends TRouteOptions>(
+    //     path: If<IsValidPath<Path>, Path, never>,
+    //     options: NoExtraKeys<RouteOptions, TRouteOptions>,
+    //     ...handlers: TRouteHandler<Path, RouteOptions>[]
+    // ): RedefinedThis<
+    //     This,
+    //     Options,
+    //     Routes,
+    //     Routers,
+    //     Method,
+    //     Path,
+    //     RouteOptions & { params: PathParamsToZod<Path> }
+    // >
+    // <
+    //     const Path extends string,
+    //     const RouteOptions extends TRouteOptionsWidthPathParams<Path>,
+    // >(
+    //     path: If<IsValidPath<Path>, Path, never>,
+    //     ...handlers:
+    //         | [
+    //               NoExtraKeys<RouteOptions, TRouteOptions>,
+    //               ...TRouteHandler<Path, RouteOptions>[],
+    //           ]
+    //         | TRouteHandler<Path, RouteOptions>[]
+    // ): RedefinedThis<This, Options, Routes, Routers, Method, Path, RouteOptions>
 }
 
 type PathParams<Path extends string> =
