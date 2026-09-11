@@ -1,6 +1,6 @@
-import { openapi } from '@express-zod/openapi'
-import { Application, Router } from 'express-zod'
+import express from 'express'
 import z from 'zod'
+import { Application, Router } from '../src'
 
 export const users = Array.from({ length: 10 }).map((_, index) => ({
     id: index + 1,
@@ -11,7 +11,7 @@ const router = new Router({ prefix: '/users' })
         res.json(users)
     })
     .get('/:id', (req, res) => {
-        res.json(users.find((item) => item.id === Number(req.params.id)))
+        res.json(users.find((item) => item.id === +req.params.id))
     })
     .post(
         '/',
@@ -31,10 +31,8 @@ const router = new Router({ prefix: '/users' })
     )
 
 export const application = new Application()
-    .use(openapi({ openapi: '3.0.1', info: { title: '', version: '' } }))
+    .use(express.json())
     .use(router)
     .get('', (_, res) => {
         res.end()
     })
-
-application.listen(3000)
