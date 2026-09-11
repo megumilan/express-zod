@@ -318,6 +318,16 @@ export type IsValidPath<S extends string> =
             : false
         : IsValidSegment<S>
 
+export type TPluginContext = {
+    readonly raw: Router | Express
+    readonly instance: _Router | Application
+}
+
+export interface TPlugin {
+    readonly name: string
+    readonly install: (ctx: TPluginContext) => void
+}
+
 function joinPath<const Prefix extends string, const Path extends string>(
     prefix: Prefix,
     path: Path,
@@ -361,21 +371,22 @@ class _Router<
                     : [_handlers[0] || {}, _handlers.slice(1)]
             ) as [RouteOptions, RequestHandler[]]
 
-            let schema = {} as Partial<TRouteSchema>
+            let staticSchema = {} as Partial<TRouteSchema>
             for (const key of ROUTE_SCHEMAS) {
-                if (key === 'params' || key === 'responses') {
+                if (key === 'params') {
                     continue
                 }
                 if (options[key]) {
-                    schema[key] = options[key] as never
+                    staticSchema[key] = options[key] as never
                 }
             }
             if (isMatchPathParams(path)) {
                 const params = generatePathParamsSchema(path)
-                schema = { params, ...schema }
+                staticSchema = { params, ...staticSchema }
             }
-            if (Object.keys(schema).length) {
-                handlers.unshift(schemaValidator(schema))
+            const { responses, ...runtimeSchema } = staticSchema
+            if (Object.keys(runtimeSchema).length) {
+                handlers.unshift(schemaValidator(runtimeSchema))
             }
 
             let fullPath: string = path
@@ -384,11 +395,12 @@ class _Router<
                 fullPath = joinPath(prefix, path)
             }
             ;(this._host as Router)[method](fullPath, ...handlers)
+            console.log('schema', staticSchema)
             this._routes.push({
                 method,
                 path,
                 fullPath,
-                options,
+                options: { ...options, ...staticSchema },
             })
             return this as unknown as RedefinedThis<
                 this,
@@ -420,8 +432,17 @@ class _Router<
     head = this.registerRoute('head')
     options = this.registerRoute('options')
 
-    use(middleware: RequestHandler | ErrorRequestHandler) {
-        this._host.use(middleware)
+    use(middleware: RequestHandler | ErrorRequestHandler): this
+    use(plugin: TPlugin): this
+    use(target: RequestHandler | ErrorRequestHandler | TPlugin) {
+        if (typeof target === 'function') {
+            this._host.use(target)
+        } else {
+            target.install({
+                raw: this._host,
+                instance: this,
+            })
+        }
         return this
     }
 }

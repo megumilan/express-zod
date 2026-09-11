@@ -4,7 +4,12 @@ import express, {
     type RequestHandler,
 } from 'express'
 import type { Simplify } from 'type-fest'
-import type { NoExtraKeys, TRouteRecord, TRouterOptions } from './router'
+import type {
+    NoExtraKeys,
+    TPlugin,
+    TRouteRecord,
+    TRouterOptions,
+} from './router'
 import { Router } from './router'
 
 export class Application<
@@ -13,6 +18,7 @@ export class Application<
     const Routers extends Router[] = [],
 > extends Router<Options, Routes, Routers> {
     protected _host: Express = express()
+    private readonly _routers: Router[] = []
 
     constructor(options?: NoExtraKeys<Options, TRouterOptions>) {
         void super(options)
@@ -22,11 +28,22 @@ export class Application<
     override use<const R extends Router>(
         router: R,
     ): Application<Options, Routes, [...Routers, R]>
-    override use(target: RequestHandler | ErrorRequestHandler | Router) {
+    override use(plugin: TPlugin): this
+    override use(
+        target: RequestHandler | ErrorRequestHandler | Router | TPlugin,
+    ) {
         if (typeof target === 'function') {
             this._host.use(target)
-        } else {
+        }
+        if (target instanceof Router) {
             this._host.use(target.router)
+            this._routers.push(target)
+        }
+        if (typeof target === 'object' && 'install' in target) {
+            target.install({
+                raw: this._host,
+                instance: this,
+            })
         }
         return this
     }
@@ -41,6 +58,14 @@ export class Application<
 
     get listen() {
         return this._host.listen.bind(this._host)
+    }
+
+    get routers() {
+        return this._routers
+    }
+
+    override get routes() {
+        return [...this._routes, ...this.routers.flatMap((r) => r.routes)]
     }
 }
 
