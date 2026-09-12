@@ -7,5 +7,6 @@ export default defineConfig({
     dts: true,
     deps: {
         neverBundle: true,
+        alwaysBundle: ['type-fest'],
     },
 })

@@ -1,6 +1,6 @@
 {
     "name": "express-zod",
-    "version": "0.0.1-alpha.0",
+    "version": "0.0.1-alpha.1",
     "description": "Type-safe, schema-validated routing for Express and Zod",
     "keywords": [
         "express",
