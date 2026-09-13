@@ -100,13 +100,7 @@ type RouterToFunctions<R extends Router> =
         ? Simplify<
               {
                   [Route in Routes[number] as Route extends TRouteRecord
-                      ? Route['options'] extends {
-                            meta: infer Meta
-                        }
-                          ? Meta extends { operationId: infer OperationId }
-                              ? OperationId
-                              : `${Route['method']}${PathToCamel<Route['fullPath']>}`
-                          : `${Route['method']}${PathToCamel<Route['fullPath']>}`
+                      ? `${Route['method']}${PathToCamel<Route['fullPath']>}`
                       : never]: Route extends TRouteRecord
                       ? RouteFunction<Route>
                       : never
