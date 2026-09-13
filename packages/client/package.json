@@ -1,10 +1,14 @@
 {
     "name": "@express-zod/client",
-    "version": "1.0.0",
-    "description": "",
-    "keywords": [],
-    "license": "ISC",
-    "author": "",
+    "version": "0.0.1-alpha.0",
+    "description": "Type-safe API client for ExpressZod",
+    "keywords": [
+        "express",
+        "zod",
+        "client"
+    ],
+    "license": "MIT",
+    "author": "megumilan",
     "type": "module",
     "exports": {
         ".": {
