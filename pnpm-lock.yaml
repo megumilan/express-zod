@@ -55,7 +55,7 @@ importers:
         version: link:../core
 
   packages/core:
-    dependencies:
+    devDependencies:
       express:
         specifier: ^5
         version: 5.2.1

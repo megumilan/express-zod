@@ -24,6 +24,10 @@
         "build": "tsdown",
         "test": "vitest"
     },
+    "devDependencies": {
+        "express": "^5",
+        "zod": "^4"
+    },
     "peerDependencies": {
         "express": "^5",
         "zod": "^4"
