@@ -13,29 +13,10 @@ export function inferPathParamsSchema(path: string) {
     const shape: Record<string, ZodType> = {}
     for (const match of path.matchAll(/:([a-zA-Z0-9_-]+)(})?/g)) {
         const [, slug, optional] = match
-
         shape[slug] = optional ? z.string().optional() : z.string()
     }
     return z.object(shape)
 }
-
-// export function generatePathParamsSchema(path: string) {
-//     const shape: Record<string, ZodType> = {}
-
-//     for (const segment of path.split('/')) {
-//         if (!segment.startsWith(':')) {
-//             continue
-//         }
-//         const target = segment.slice(1)
-//         const optional = target.includes('}')
-//         const slug = optional
-//             ? target.replace('}', '').replace('{', '').trim()
-//             : target
-//         shape[slug] = optional ? z.string().optional() : z.string()
-//     }
-
-//     return z.object(shape)
-// }
 
 export function schemaValidator(schema: Partial<TRouteSchema>): RequestHandler {
     const { responses, ...schemas } = schema

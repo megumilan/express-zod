@@ -2,15 +2,19 @@ import type { IncomingHttpHeaders } from 'node:http'
 import {
     type ErrorRequestHandler,
     type Express,
+    Router as ExpressRouter,
+    type IRoute,
+    type IRouter,
     type NextFunction,
     type Request,
     type RequestHandler,
     type Response,
-    Router,
     type RouterOptions,
 } from 'express'
 import type {
     If,
+    IsEmptyObject,
+    IsNever,
     IsUnknown,
     MergeDeep,
     OmitIndexSignature,
@@ -25,6 +29,8 @@ import {
     isMatchPathParams,
     schemaValidator,
 } from './schema-validator'
+import type { ExtractPathParams } from './types/path-regexp'
+import type { MarkOptionalIfUndefined } from './types/utility'
 
 declare global {
     namespace ExpressZod {
@@ -40,7 +46,14 @@ declare global {
             status<const Code extends keyof Responses>(
                 statusCode: Code,
             ): TRouteResponse<Responses, Locals, Code>
-            json(body?: Responses[StatusCode]): this
+            // json(body?: Responses[StatusCode]): this
+            json(
+                ...args: If<
+                    IsNever<Responses[StatusCode]>,
+                    [],
+                    [body: Responses[StatusCode]]
+                >
+            ): this
         }
     }
 }
@@ -84,14 +97,6 @@ export interface TRouteResponseSchema {
     [K: number]: ZodType
 }
 
-// export type TRouteSchema = {
-//     [K in TRouteSchemaKey]: K extends 'responses'
-//         ? TRouteResponseSchema
-//         : K extends 'body'
-//           ? ZodType
-//           : ZodObject
-// }
-
 export interface TRouteSchema {
     params: ZodObject
     query: ZodObject
@@ -112,11 +117,6 @@ export interface TRouteOptions
     extends Partial<TRouteSchema>,
         ExpressZod.TRouteOptions {}
 
-// export interface TRouteOptionsWidthPathParams<Path extends string>
-//     extends TRouteOptions {
-//     params: IsMatchPathParams<Path> extends true ? PathParamsToZod<Path> : {}
-// }
-
 type JoinPath<Prefix, Path extends string> = Prefix extends string
     ? Prefix extends ''
         ? Path
@@ -124,15 +124,6 @@ type JoinPath<Prefix, Path extends string> = Prefix extends string
           ? Prefix
           : `${Prefix extends `${infer P}/` ? P : Prefix}/${Path extends `/${infer P}` ? P : Path}`
     : Path
-
-type _ExtractRouteSchema<Options extends TRouteOptions | undefined> =
-    Options extends undefined
-        ? {}
-        : {
-              [K in keyof Options & keyof TRouteSchema]: K extends keyof Options
-                  ? NonNullable<Options[K]>
-                  : never
-          }
 
 type PathParamsToZod<Path extends string, T = PathParams<Path>> = ZodObject<{
     [K in keyof T]-?: {} extends Pick<T, K> ? ZodOptional<ZodString> : ZodString
@@ -156,7 +147,7 @@ type RedefinedThis<
     This,
     Options extends TRouterOptions,
     Routes extends TRouteRecord[],
-    Routers extends _Router[],
+    Routers extends Router[],
     Method extends TRoueMethod,
     Path extends string,
     RouteOptions extends TRouteOptions,
@@ -166,7 +157,7 @@ type RedefinedThis<
           [...Routes, GenerateRoute<Method, Path, RouteOptions, Options>],
           Routers
       >
-    : _Router<
+    : Router<
           Options,
           [...Routes, GenerateRoute<Method, Path, RouteOptions, Options>],
           Routers
@@ -176,7 +167,7 @@ type InferRouteSchema<
     Path extends string,
     Options extends TRouteOptions,
 > = MergeDeep<
-    { params: PathParams<Path> },
+    { params: ExtractPathParams<Path> },
     {
         [K in keyof Options]: K extends 'responses'
             ? {
@@ -202,7 +193,9 @@ export type TRouteHandler<
     Path extends string,
     Options extends TRouteOptions,
     Inferred = InferRouteSchema<Path, Options>,
-    Params = Inferred extends { params: infer P } ? P : unknown,
+    Params = Inferred extends { params: infer P }
+        ? MarkOptionalIfUndefined<P>
+        : unknown,
     Responses = Inferred extends { responses: infer R } ? R : unknown,
     Resp = Responses extends { 200: infer S } ? S : unknown,
     Body = Inferred extends { body: infer B } ? B : unknown,
@@ -225,11 +218,14 @@ export interface TRouteRegistrar<
     Options extends TRouterOptions,
     Method extends TRoueMethod,
     Routes extends TRouteRecord[],
-    Routers extends _Router[],
+    Routers extends Router[],
 > {
     <const Path extends string, const RouteOptions extends TRouteOptions>(
-        path: If<IsValidPath<Path>, Path, never>,
-        options: NoExtraKeys<RouteOptions, TRouteOptions>,
+        // path: If<IsValidPath<Path>, Path, never>,
+        path: Path,
+        options: IsEmptyObject<RouteOptions> extends true
+            ? RouteOptions
+            : NoExtraKeys<RouteOptions, TRouteOptions>,
         ...handlers: TRouteHandler<Path, RouteOptions>[]
     ): RedefinedThis<
         This,
@@ -242,10 +238,12 @@ export interface TRouteRegistrar<
             If<IsMatchPathParams<Path>, { params: PathParamsToZod<Path> }, {}>
     >
     <const Path extends string, const RouteOptions extends TRouteOptions = {}>(
-        path: If<IsValidPath<Path>, Path, never>,
+        path: Path,
         ...handlers:
             | [
-                  NoExtraKeys<RouteOptions, TRouteOptions>,
+                  IsEmptyObject<RouteOptions> extends true
+                      ? RouteOptions
+                      : NoExtraKeys<RouteOptions, TRouteOptions>,
                   ...TRouteHandler<Path, RouteOptions>[],
               ]
             | TRouteHandler<Path, RouteOptions>[]
@@ -259,31 +257,6 @@ export interface TRouteRegistrar<
         RouteOptions &
             If<IsMatchPathParams<Path>, { params: PathParamsToZod<Path> }, {}>
     >
-    // <const Path extends string, const RouteOptions extends TRouteOptions>(
-    //     path: If<IsValidPath<Path>, Path, never>,
-    //     options: NoExtraKeys<RouteOptions, TRouteOptions>,
-    //     ...handlers: TRouteHandler<Path, RouteOptions>[]
-    // ): RedefinedThis<
-    //     This,
-    //     Options,
-    //     Routes,
-    //     Routers,
-    //     Method,
-    //     Path,
-    //     RouteOptions & { params: PathParamsToZod<Path> }
-    // >
-    // <
-    //     const Path extends string,
-    //     const RouteOptions extends TRouteOptionsWidthPathParams<Path>,
-    // >(
-    //     path: If<IsValidPath<Path>, Path, never>,
-    //     ...handlers:
-    //         | [
-    //               NoExtraKeys<RouteOptions, TRouteOptions>,
-    //               ...TRouteHandler<Path, RouteOptions>[],
-    //           ]
-    //         | TRouteHandler<Path, RouteOptions>[]
-    // ): RedefinedThis<This, Options, Routes, Routers, Method, Path, RouteOptions>
 }
 
 type PathParams<Path extends string> =
@@ -299,13 +272,6 @@ type PathParams<Path extends string> =
             ? { [K in Param]: string }
             : {}
 
-type _WithParams<Path extends string, Options extends TRouteOptions> = Omit<
-    Options,
-    'params'
-> & {
-    params: PathParams<Path>
-}
-
 type IsValidSegment<S extends string> = S extends `{${infer Inner}}`
     ? Inner extends `/${string}`
         ? IsValidPath<Inner extends `/${infer Rest}` ? Rest : never>
@@ -317,21 +283,26 @@ type IsValidSegment<S extends string> = S extends `{${infer Inner}}`
       : false
 
 /** All path segments must be lowercase and must not contain `-` or `_`. */
-export type IsValidPath<S extends string> =
-    S extends `${infer Segment}/${infer Rest}`
-        ? IsValidSegment<Segment> extends true
-            ? IsValidPath<Rest>
-            : false
-        : IsValidSegment<S>
+type IsValidPath<S extends string> = S extends `${infer Segment}/${infer Rest}`
+    ? IsValidSegment<Segment> extends true
+        ? IsValidPath<Rest>
+        : false
+    : IsValidSegment<S>
 
 export type TPluginContext = {
-    readonly raw: Router | Express
-    readonly instance: _Router | Application
+    readonly raw: ExpressRouter | Express
+    readonly instance: Router | Application
 }
 
 export interface TPlugin {
     readonly name: string
     readonly install: (ctx: TPluginContext) => void
+}
+
+export interface TRoute extends IRoute {
+    method: TRoueMethod
+    fullPath: string
+    routeOptions: TRouteOptions
 }
 
 function joinPath<const Prefix extends string, const Path extends string>(
@@ -346,14 +317,16 @@ function joinPath<const Prefix extends string, const Path extends string>(
     return `${normalizedPrefix}/${normalizedPath}` as JoinPath<Prefix, Path>
 }
 
-class _Router<
+class Router<
     const Options extends TRouterOptions = {},
     const Routes extends TRouteRecord[] = [],
-    const Routers extends _Router[] = [],
+    const Routers extends Router[] = [],
 > {
-    protected _options?: TRouterOptions
-    protected readonly _host: Express | Router = Router()
-    protected readonly _routes: TRouteRecord[] = []
+    #host = ExpressRouter()
+    protected readonly _options?: TRouterOptions
+    protected get host(): IRouter {
+        return this.#host
+    }
 
     constructor(options?: NoExtraKeys<Options, TRouterOptions>) {
         this._options = (options || {}) as Options
@@ -371,11 +344,12 @@ class _Router<
                 | TRouteHandler<Path, RouteOptions>[]
                 | [RouteOptions, ...TRouteHandler<Path, RouteOptions>[]]
         ) => {
-            const [options, handlers] = (
-                typeof _handlers[0] === 'function'
-                    ? [{}, _handlers]
-                    : [_handlers[0] || {}, _handlers.slice(1)]
-            ) as [RouteOptions, RequestHandler[]]
+            const [options, handlers] = (typeof _handlers[0] === 'function'
+                ? [{}, _handlers]
+                : [_handlers[0] || {}, _handlers.slice(1)]) as unknown as [
+                RouteOptions,
+                RequestHandler[],
+            ]
 
             let staticSchema = {} as Partial<TRouteSchema>
             for (const key of ROUTE_SCHEMAS) {
@@ -399,16 +373,15 @@ class _Router<
             }
 
             let fullPath: string = path
-            const prefix = this._options?.prefix?.trim()
+            const prefix = this._options?.prefix?.trim() || ''
             if (prefix) {
                 fullPath = joinPath(prefix, path)
             }
-            ;(this._host as Router)[method](fullPath, ...handlers)
-            this._routes.push({
+            this.host[method](fullPath, ...handlers)
+            this.updateLastRoute({
                 method,
-                path,
                 fullPath,
-                options: { ...options, ...staticSchema },
+                routeOptions: { ...options, ...staticSchema },
             })
             return this as unknown as RedefinedThis<
                 this,
@@ -422,37 +395,99 @@ class _Router<
         }
     }
 
-    /** The original {@link Router Express.Router} */
-    get router() {
-        return this._host
-    }
-
-    /** The records of the registered routes */
+    /** The registered routes */
     get routes() {
-        return this._routes
+        return this.getRoutes(this.host)
     }
 
-    get = this.registerRoute('get')
-    post = this.registerRoute('post')
-    put = this.registerRoute('put')
-    delete = this.registerRoute('delete')
-    patch = this.registerRoute('patch')
-    head = this.registerRoute('head')
-    options = this.registerRoute('options')
+    get get() {
+        return this.registerRoute('get')
+    }
+    get post() {
+        return this.registerRoute('post')
+    }
+    get put() {
+        return this.registerRoute('put')
+    }
+    get delete() {
+        return this.registerRoute('delete')
+    }
+    get patch() {
+        return this.registerRoute('patch')
+    }
+    get head() {
+        return this.registerRoute('head')
+    }
+    get options() {
+        return this.registerRoute('options')
+    }
 
     use(middleware: RequestHandler | ErrorRequestHandler): this
+    use<const R extends Router>(
+        router: R,
+    ): this extends Application
+        ? Application<Options, Routes, [...Routers, R]>
+        : Router<Options, Routes, [...Routers, R]>
     use(plugin: TPlugin): this
-    use(target: RequestHandler | ErrorRequestHandler | TPlugin) {
+    use<const R extends Router>(
+        target: RequestHandler | ErrorRequestHandler | R | TPlugin,
+    ) {
         if (typeof target === 'function') {
-            this._host.use(target)
-        } else {
+            this.host.use(target)
+        }
+        if (target instanceof Router) {
+            this.host.use(this._options?.prefix || '', target.host)
+            this.splicePrefix(this._options?.prefix || '', target.host)
+        }
+        if (typeof target === 'object' && 'install' in target) {
             target.install({
-                raw: this._host,
+                raw: this.host,
                 instance: this,
             })
         }
-        return this
+        return this as
+            | Application<Options, Routes, [...Routers, R]>
+            | Router<Options, Routes, [...Routers, R]>
+    }
+
+    protected getRoutes(router: IRouter) {
+        const routes: TRoute[] = []
+        for (const layer of router.stack) {
+            if (layer.route) {
+                routes.push(layer.route as TRoute)
+                continue
+            }
+            const childRouter = layer.handle as unknown as IRouter
+            if (Array.isArray(childRouter?.stack)) {
+                routes.push(...this.getRoutes(childRouter))
+            }
+        }
+        return routes
+    }
+
+    protected updateLastRoute(
+        data: Pick<TRoute, 'method' | 'fullPath' | 'routeOptions'>,
+    ) {
+        const target = this.routes.at(-1)
+        if (target) {
+            target.method = data.method
+            target.fullPath = data.fullPath
+            target.routeOptions = data.routeOptions
+        }
+    }
+
+    protected splicePrefix(prefix: string, router?: IRouter) {
+        if (router) {
+            const routes = this.getRoutes(router)
+            return routes.forEach((route) => {
+                route.fullPath = joinPath(prefix, route.fullPath || route.path)
+            })
+        }
+        const target = this.routes.at(-1)
+        if (target) {
+            target.fullPath = joinPath(prefix, target.fullPath || target.path)
+        }
     }
 }
 
-export { _Router as Router }
+export { Router }

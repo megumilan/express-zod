@@ -1,13 +1,14 @@
 /// <reference types="zod-openapi" />
 
-import type { Express } from 'express'
-import type { TPlugin, TRouteRecord, TRouteSchema } from 'express-zod'
+import type { IRouter } from 'express'
+import type { TPlugin, TRoute, TRouteSchema } from 'express-zod'
 import type { Except, OmitIndexSignature } from 'type-fest'
 import type { ZodType } from 'zod'
 import {
     createDocument,
     type ZodOpenApiObject,
     type ZodOpenApiOperationObject,
+    type ZodOpenApiParameters,
     type ZodOpenApiPathsObject,
     type ZodOpenApiResponsesObject,
 } from 'zod-openapi'
@@ -29,14 +30,6 @@ declare global {
                 | 'requestParams'
                 | 'tags'
             > & { tags?: EnabledTags[] }
-            // meta?: Partial<{
-            //     tags: string[]
-            //     summary: string
-            //     description: string
-            //     operationId: string
-            //     externalDocs: string
-            //     deprecated: boolean
-            // }>
         }
     }
 }
@@ -57,20 +50,30 @@ interface TOpenAPIOptions<Tags = []>
     tags?: Tags | (TOpenAPITag[] & {})
 }
 
+const paramsKeys = ['params', 'query', 'headers', 'cookies'] as const
+
+type ParamsKey = (typeof paramsKeys)[number]
+
+const paramsMap: Record<ParamsKey, keyof ZodOpenApiParameters> = {
+    params: 'path',
+    query: 'query',
+    headers: 'header',
+    cookies: 'cookie',
+}
+
+function isParamsKey(key: string): key is ParamsKey {
+    return paramsKeys.includes(key as ParamsKey)
+}
+
 function toOpenapiSchema(schema: TRouteSchema) {
     return Object.entries(schema).reduce((acc, [key, schema]) => {
         if (!schema) {
             return acc
         }
 
-        if (key === 'params') {
+        if (isParamsKey(key)) {
             acc.requestParams ??= {}
-            acc.requestParams.path = schema
-        }
-
-        if (key === 'query') {
-            acc.requestParams ??= {}
-            acc.requestParams.query = schema
+            acc.requestParams[paramsMap[key]] = schema
         }
 
         if (key === 'body') {
@@ -101,28 +104,31 @@ function toOpenapiSchema(schema: TRouteSchema) {
                 {} as ZodOpenApiResponsesObject,
             )
         }
+
         return acc
     }, {} as ZodOpenApiOperationObject)
 }
 
 function toOpenapiPath(path: string) {
-    return path.replace(/\{?\/:([a-zA-Z0-9_]+)\}?/g, '/{$1}')
+    return path?.replace(/\{?\/:([a-zA-Z0-9_]+)\}?/g, '/{$1}')
 }
 
-function generateOpenapiPaths(routes: TRouteRecord[]) {
+function generateOpenapiPaths(routes: TRoute[]) {
     return Object.values(routes).reduce(
-        (acc, { fullPath, method, options }) => {
-            const { meta, ...rest } = options ?? {}
+        (acc, { fullPath, method, routeOptions }) => {
+            const { meta, ...rest } = routeOptions ?? {}
             const schema = rest as TRouteSchema
             const path = toOpenapiPath(fullPath)
-            if (acc[path]) {
-                acc[path][method] = {
-                    ...meta,
-                    ...toOpenapiSchema(schema),
-                } as ZodOpenApiOperationObject
-            } else {
-                acc[path] ??= {
-                    [method]: { ...meta, ...toOpenapiSchema(schema) },
+            if (path) {
+                if (acc[path]) {
+                    acc[path][method] = {
+                        ...meta,
+                        ...toOpenapiSchema(schema),
+                    } as ZodOpenApiOperationObject
+                } else {
+                    acc[path] ??= {
+                        [method]: { ...meta, ...toOpenapiSchema(schema) },
+                    }
                 }
             }
             return acc
@@ -132,7 +138,7 @@ function generateOpenapiPaths(routes: TRouteRecord[]) {
 }
 
 function docsJson(
-    routes: TRouteRecord[],
+    routes: TRoute[],
     options: TOpenAPIOptions,
 ): ReturnType<typeof createDocument> {
     return createDocument({
@@ -215,10 +221,11 @@ function openapi<const Tags extends TOpenAPITag[] = []>(
     return {
         name: 'openapi',
         install: ({ raw, instance }) => {
-            const app = raw as Express
+            const app = raw as IRouter
             const jsonPath = options.path?.json as string
             const uiPath = options.path?.ui as string
             app.get(jsonPath, (_, res) => {
+                console.log(instance.routes)
                 res.json(docsJson(instance.routes, options as never))
             })
             app.get(uiPath, (_, res) => {

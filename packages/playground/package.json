@@ -13,6 +13,7 @@
     "dependencies": {
         "@express-zod/client": "workspace:*",
         "@express-zod/openapi": "workspace:*",
+        "express": "^5.2.1",
         "express-zod": "workspace:*"
     },
     "packageManager": "pnpm@10.34.4"

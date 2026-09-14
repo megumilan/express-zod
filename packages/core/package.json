@@ -22,7 +22,11 @@
     ],
     "scripts": {
         "build": "tsdown",
-        "test": "vitest"
+        "dev": "tsx src/index",
+        "test:ui": "vitest --ui"
+    },
+    "dependencies": {
+        "path-to-regexp": "^8.4.2"
     },
     "devDependencies": {
         "express": "^5",
