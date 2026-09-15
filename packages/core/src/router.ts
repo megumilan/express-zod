@@ -16,20 +16,13 @@ import type {
     IsEmptyObject,
     IsNever,
     IsUnknown,
-    MergeDeep,
     OmitIndexSignature,
     Simplify,
     Writable,
 } from 'type-fest'
-import type { output, ZodObject, ZodOptional, ZodString, ZodType } from 'zod'
+import type { output, ZodObject, ZodType } from 'zod'
 import type { Application } from './application'
-import {
-    type IsMatchPathParams,
-    inferPathParamsSchema,
-    isMatchPathParams,
-    schemaValidator,
-} from './schema-validator'
-import type { ExtractPathParams } from './types/path-regexp'
+import { schemaValidator } from './schema-validator'
 import type { MarkOptionalIfUndefined } from './types/utility'
 
 declare global {
@@ -59,11 +52,6 @@ declare global {
 }
 
 export type NoExtraKeys<T, S> = { [K in keyof T & keyof S]: T[K] } | (S & {})
-
-// type NoExtraKeys<T, Shape> = T & Record<Exclude<keyof T, keyof Shape>, never>
-
-// type StrictObject<T extends Shape, Shape> = Pick<T, keyof Shape> &
-//     Record<Exclude<keyof T, keyof Shape>, never>
 
 export interface TRouterOptions extends RouterOptions {
     /** The prefix applies only to the current router. Other routers registered via the `use` method will not inherit it. */
@@ -125,10 +113,6 @@ type JoinPath<Prefix, Path extends string> = Prefix extends string
           : `${Prefix extends `${infer P}/` ? P : Prefix}/${Path extends `/${infer P}` ? P : Path}`
     : Path
 
-type PathParamsToZod<Path extends string, T = PathParams<Path>> = ZodObject<{
-    [K in keyof T]-?: {} extends Pick<T, K> ? ZodOptional<ZodString> : ZodString
-}>
-
 type GenerateRoute<
     Method extends TRoueMethod,
     Path extends string,
@@ -163,25 +147,19 @@ type RedefinedThis<
           Routers
       >
 
-type InferRouteSchema<
-    Path extends string,
-    Options extends TRouteOptions,
-> = MergeDeep<
-    { params: ExtractPathParams<Path> },
-    {
-        [K in keyof Options]: K extends 'responses'
-            ? {
-                  [Status in keyof Options[K]]: output<Options[K][Status]>
-              }
-            : K extends 'headers'
-              ? If<
-                    IsUnknown<output<Options[K]>>,
-                    OmitIndexSignature<IncomingHttpHeaders>,
-                    OmitIndexSignature<IncomingHttpHeaders> & output<Options[K]>
-                >
-              : output<Options[K]>
-    }
->
+type InferRouteSchema<Options extends TRouteOptions> = {
+    [K in keyof Options]: K extends 'responses'
+        ? {
+              [Status in keyof Options[K]]: output<Options[K][Status]>
+          }
+        : K extends 'headers'
+          ? If<
+                IsUnknown<output<Options[K]>>,
+                OmitIndexSignature<IncomingHttpHeaders>,
+                OmitIndexSignature<IncomingHttpHeaders> & output<Options[K]>
+            >
+          : output<Options[K]>
+}
 
 interface TRouteResponse<
     Responses extends Record<number, unknown>,
@@ -190,9 +168,8 @@ interface TRouteResponse<
 > extends ExpressZod.TRouteResponse<Responses, Locals, StatusCode> {}
 
 export type TRouteHandler<
-    Path extends string,
     Options extends TRouteOptions,
-    Inferred = InferRouteSchema<Path, Options>,
+    Inferred = InferRouteSchema<Options>,
     Params = Inferred extends { params: infer P }
         ? MarkOptionalIfUndefined<P>
         : unknown,
@@ -226,17 +203,8 @@ export interface TRouteRegistrar<
         options: IsEmptyObject<RouteOptions> extends true
             ? RouteOptions
             : NoExtraKeys<RouteOptions, TRouteOptions>,
-        ...handlers: TRouteHandler<Path, RouteOptions>[]
-    ): RedefinedThis<
-        This,
-        Options,
-        Routes,
-        Routers,
-        Method,
-        Path,
-        RouteOptions &
-            If<IsMatchPathParams<Path>, { params: PathParamsToZod<Path> }, {}>
-    >
+        ...handlers: TRouteHandler<RouteOptions>[]
+    ): RedefinedThis<This, Options, Routes, Routers, Method, Path, RouteOptions>
     <const Path extends string, const RouteOptions extends TRouteOptions = {}>(
         path: Path,
         ...handlers:
@@ -244,30 +212,21 @@ export interface TRouteRegistrar<
                   IsEmptyObject<RouteOptions> extends true
                       ? RouteOptions
                       : NoExtraKeys<RouteOptions, TRouteOptions>,
-                  ...TRouteHandler<Path, RouteOptions>[],
+                  ...TRouteHandler<RouteOptions>[],
               ]
-            | TRouteHandler<Path, RouteOptions>[]
-    ): RedefinedThis<
-        This,
-        Options,
-        Routes,
-        Routers,
-        Method,
-        Path,
-        RouteOptions &
-            If<IsMatchPathParams<Path>, { params: PathParamsToZod<Path> }, {}>
-    >
+            | TRouteHandler<RouteOptions>[]
+    ): RedefinedThis<This, Options, Routes, Routers, Method, Path, RouteOptions>
 }
 
-type PathParams<Path extends string> =
+type _PathParams<Path extends string> =
     Path extends `${infer Before}{/:${infer Optional}}${infer After}`
         ? Simplify<
-              PathParams<Before> & {
+              _PathParams<Before> & {
                   [K in Optional]?: string
-              } & PathParams<After>
+              } & _PathParams<After>
           >
         : Path extends `${infer _Before}/:${infer Param}/${infer Rest}`
-          ? Simplify<{ [K in Param]: string } & PathParams<`/${Rest}`>>
+          ? Simplify<{ [K in Param]: string } & _PathParams<`/${Rest}`>>
           : Path extends `${infer _Before}/:${infer Param}`
             ? { [K in Param]: string }
             : {}
@@ -305,6 +264,31 @@ export interface TRoute extends IRoute {
     routeOptions: TRouteOptions
 }
 
+type PrefixOf<O extends TRouterOptions> = O extends {
+    prefix: infer P extends string
+}
+    ? P
+    : ''
+
+type UpdateFullPath<R extends Router, Prefix extends string> =
+    R extends Router<infer Options, infer Routes, infer Routers>
+        ? Router<
+              Options,
+              {
+                  [K in keyof Routes]: Routes[K] extends {
+                      fullPath: infer FullPath extends string
+                  }
+                      ? Simplify<
+                            Omit<Routes[K], 'fullPath'> & {
+                                fullPath: JoinPath<Prefix, FullPath>
+                            }
+                        >
+                      : Routes[K]
+              },
+              Routers
+          >
+        : never
+
 function joinPath<const Prefix extends string, const Path extends string>(
     prefix: Prefix,
     path: Path,
@@ -341,8 +325,8 @@ class Router<
         >(
             path: Path,
             ..._handlers:
-                | TRouteHandler<Path, RouteOptions>[]
-                | [RouteOptions, ...TRouteHandler<Path, RouteOptions>[]]
+                | TRouteHandler<RouteOptions>[]
+                | [RouteOptions, ...TRouteHandler<RouteOptions>[]]
         ) => {
             const [options, handlers] = (typeof _handlers[0] === 'function'
                 ? [{}, _handlers]
@@ -351,23 +335,23 @@ class Router<
                 RequestHandler[],
             ]
 
-            let staticSchema = {} as Partial<TRouteSchema>
+            const staticSchema = {} as Partial<TRouteSchema>
             for (const key of ROUTE_SCHEMAS) {
                 if (options[key]) {
                     staticSchema[key] = options[key] as never
                 }
             }
-            if (isMatchPathParams(path)) {
-                const { params, ...rest } = staticSchema
-                const paramsInferred = inferPathParamsSchema(path)
-                staticSchema = {
-                    params: params
-                        ? paramsInferred.extend(params.shape)
-                        : paramsInferred,
-                    ...rest,
-                }
-            }
-            const { responses, ...runtimeSchema } = staticSchema
+            // if (isMatchPathParams(path)) {
+            //     const { params, ...rest } = staticSchema
+            //     const paramsInferred = inferPathParamsSchema(path)
+            //     staticSchema = {
+            //         params: params
+            //             ? paramsInferred.extend(params.shape)
+            //             : paramsInferred,
+            //         ...rest,
+            //     }
+            // }
+            const { responses: _, ...runtimeSchema } = staticSchema
             if (Object.keys(runtimeSchema).length) {
                 handlers.unshift(schemaValidator(runtimeSchema))
             }
@@ -426,8 +410,16 @@ class Router<
     use<const R extends Router>(
         router: R,
     ): this extends Application
-        ? Application<Options, Routes, [...Routers, R]>
-        : Router<Options, Routes, [...Routers, R]>
+        ? Application<
+              Options,
+              Routes,
+              [...Routers, UpdateFullPath<R, PrefixOf<Options>>]
+          >
+        : Router<
+              Options,
+              Routes,
+              [...Routers, UpdateFullPath<R, PrefixOf<Options>>]
+          >
     use(plugin: TPlugin): this
     use<const R extends Router>(
         target: RequestHandler | ErrorRequestHandler | R | TPlugin,

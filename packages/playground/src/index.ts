@@ -1,3 +1,4 @@
+import { defineClient } from '@express-zod/client'
 import { type InferOpenAPITags, openapi } from '@express-zod/openapi'
 import express from 'express'
 import { Application, Router } from 'express-zod'
@@ -13,8 +14,8 @@ const router = new Router({ prefix: '/users' })
         {
             meta: {
                 tags: ['User'],
-                summary: 'GetUsers',
                 description: '查询用户列表',
+                operationId: 'getUser',
             },
         },
         (_, res) => {
@@ -28,6 +29,9 @@ const router = new Router({ prefix: '/users' })
                 summary: 'GetUserById',
                 tags: ['User'],
             },
+            params: z.object({
+                id: z.string().optional(),
+            }),
         },
         (req, res) => {
             res.json(users.find((item) => item.id === Number(req.params.id)))
@@ -38,7 +42,7 @@ const router = new Router({ prefix: '/users' })
         {
             meta: {
                 summary: 'CreateUser',
-                tags: ['User'],
+                tags: ['User', 'Basic'],
             },
             headers: z.object({
                 /** Custom header */
@@ -94,6 +98,10 @@ export const app = new Application({ prefix: '/api' })
     .use(router)
 
 app.listen(3000)
+
+const _client = defineClient<typeof app>('http://localhost:3000/')
+
+_client.post('/api/users', { body: { id: 1 }, headers: { _token: '' } })
 
 declare global {
     namespace ExpressZodOpenAPI {

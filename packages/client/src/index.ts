@@ -1,7 +1,8 @@
 import {
-    type Application,
     HTTP_METHODS,
     type Router,
+    type TRoueMethod,
+    type TRouteOptions,
     type TRouteRecord,
 } from 'express-zod'
 import type {
@@ -15,23 +16,21 @@ import type {
 } from 'type-fest'
 import type { output } from 'zod'
 
-type CapitalizeSegment<Segment extends string> =
-    Segment extends `:${infer Param}`
-        ? `By${Capitalize<Param>}`
-        : Capitalize<Segment>
-
-type PathToCamel<Path extends string> =
-    Path extends `${infer Before}{/:${infer Param}}${infer After}`
-        ? `${PathToCamel<Before>}By${Capitalize<Param>}Optional${After extends ''
-              ? ''
-              : 'And'}${PathToCamel<After>}`
-        : Path extends `/${infer Segment}/${infer Rest}`
-          ? `${CapitalizeSegment<Segment>}${Segment extends `:${string}`
-                ? 'And'
-                : ''}${PathToCamel<`/${Rest}`>}`
-          : Path extends `/${infer Segment}`
-            ? CapitalizeSegment<Segment>
-            : ''
+type MarkOptionalIfNoRequiredKeys<T extends object> = Simplify<
+    {
+        [K in keyof T as T[K] extends object
+            ? RequiredKeysOf<T[K]> extends never
+                ? never
+                : K
+            : K]: T[K]
+    } & {
+        [K in keyof T as T[K] extends object
+            ? RequiredKeysOf<T[K]> extends never
+                ? K
+                : never
+            : never]?: T[K]
+    }
+>
 
 type OmitUnknown<T> = Simplify<{
     [K in keyof T as unknown extends T[K] ? never : K]: T[K]
@@ -51,188 +50,136 @@ type RemoveUndefinedIfOptional<T> = T extends (...args: unknown[]) => unknown
           }
         : T
 
-type SetOptionalIfNoRequiredKeys<T extends object> = Simplify<
-    {
-        [K in keyof T as T[K] extends object
-            ? RequiredKeysOf<T[K]> extends never
-                ? never
-                : K
-            : K]: T[K]
-    } & {
-        [K in keyof T as T[K] extends object
-            ? RequiredKeysOf<T[K]> extends never
-                ? K
-                : never
-            : never]?: T[K]
-    }
->
-
-type InferRouteOptions<Route extends TRouteRecord> = OmitUnknown<{
-    [K in keyof Route['options']]: K extends 'responses'
+type InferSchema<Options extends TRouteOptions> = OmitUnknown<{
+    [K in keyof Options]: K extends 'responses'
         ? Simplify<
               Writable<{
-                  [Status in keyof Route['options'][K]]: RemoveUndefinedIfOptional<
-                      output<Route['options'][K][Status]>
+                  [Status in keyof Options[K]]: RemoveUndefinedIfOptional<
+                      output<Options[K][Status]>
                   >
               }>
           >
-        : RemoveUndefinedIfOptional<output<Route['options'][K]>>
+        : RemoveUndefinedIfOptional<output<Options[K]>>
 }>
 
-type RouteFunction<
-    Route extends TRouteRecord,
-    Schema = SetOptionalIfNoRequiredKeys<InferRouteOptions<Route>>,
-    R = Schema extends {
-        responses: infer Responses extends Record<number, unknown>
+type InferOptions<
+    Options extends TRouteOptions,
+    Schema = InferSchema<Options>,
+    Arguments = Simplify<
+        MarkOptionalIfNoRequiredKeys<Omit<Schema, 'responses'>>
+    >,
+> = Simplify<{
+    _required: HasRequiredKeys<Arguments & {}>
+    arguments: Arguments
+    responses: Schema extends {
+        responses: infer Responses
     }
-        ? Responses[200]
-        : unknown,
-    Args = Simplify<Omit<Schema, 'responses'>>,
-    IsRequired extends boolean = HasRequiredKeys<Schema & {}>,
-> = If<
-    IsRequired,
-    (args: Args) => Promise<R>,
-    If<IsEmptyObject<Args>, () => Promise<R>, (args?: Args) => Promise<R>>
->
+        ? Responses extends { 200: infer _ }
+            ? Responses
+            : { 200: unknown }
+        : { 200: unknown }
+}>
 
-type RouterToFunctions<R extends Router> =
+type RouterRecords<R extends Router> =
     R extends Router<infer _, infer Routes, infer Routers>
-        ? Simplify<
-              {
-                  [Route in Routes[number] as Route extends TRouteRecord
-                      ? `${Route['method']}${PathToCamel<Route['fullPath']>}`
-                      : never]: Route extends TRouteRecord
-                      ? RouteFunction<Route>
+        ? {
+              [Method in Routes[number] extends infer Route
+                  ? Route extends TRouteRecord
+                      ? Route['method']
                       : never
-              } & (ArrayLength<Routers> extends 0
-                  ? {}
-                  : RouterToFunctions<Routers[number]>)
-          >
+                  : never]: {
+                  [Route in Routes[number] as Route extends TRouteRecord
+                      ? Route['method'] extends Method
+                          ? Route['fullPath']
+                          : never
+                      : never]: Route extends TRouteRecord
+                      ? InferOptions<Route['options'] & {}>
+                      : never
+              }
+          } & (ArrayLength<Routers> extends 0
+              ? {}
+              : RouterRecords<Routers[number]>)
         : {}
 
-type TApplicationToClient<App extends Application> = RouterToFunctions<App>
-
-function splitCamelCase(value: string): string[] {
-    return value.split(/(?=[A-Z])/)
-}
-
-enum PathKeyword {
-    By = 'By',
-    Optional = 'Optional',
-    And = 'And',
-}
-
-function uncapitalize<T extends string>(value: T): Uncapitalize<T> {
-    return (value.charAt(0).toLowerCase() + value.slice(1)) as Uncapitalize<T>
-}
-
-function parseApiName(name: string) {
-    const method = HTTP_METHODS.find((method) => name.startsWith(method))
-
-    if (!method) {
-        throw new Error(`Invalid API name: ${name}`)
-    }
-
-    const splitted = splitCamelCase(name)
-
-    const slugs: string[] = []
-    let slugStart = splitted.length
-    let slugEnd = splitted.length
-
-    const segments = splitted.map((segment, index) => {
-        if (index === 0) {
-            return ''
-        }
-        if (segment === PathKeyword.By) {
-            slugStart = index + 1
-            return ''
-        }
-        if (segment === PathKeyword.Optional) {
-            slugs.push(segment)
-            if (index === splitted.length - 1) {
-                slugEnd = index
-                const slug = uncapitalize(
-                    slugs
-                        .filter((slug) => slug !== PathKeyword.Optional)
-                        .join(''),
-                )
-                return `{/:${slug}}`
+type RouterToFunctions<
+    R extends Router,
+    Routes extends Record<
+        string,
+        Record<
+            string,
+            {
+                _required: boolean
+                arguments: unknown
+                responses: Record<number, unknown>
             }
-            return ''
-        }
-        if (index >= slugStart && index < slugEnd) {
-            slugs.push(segment)
-        }
-        if (index === splitted.length - 1 || segment === PathKeyword.And) {
-            slugEnd = index
-            const slug = uncapitalize(
-                slugs.filter((slug) => slug !== PathKeyword.Optional).join(''),
-            )
-            if (slugs.includes(PathKeyword.Optional)) {
-                return `{/:${slug}}`
-            }
-            return `/:${slug}`
-        }
-        if (index >= slugStart) {
-            return ''
-        }
-        return `/${segment.toLowerCase()}`
-    })
-
-    return {
-        method,
-        path: segments.filter(Boolean).join(''),
-    }
-}
+        >
+    > = RouterRecords<R>,
+> = Simplify<{
+    [Method in keyof Routes]: <const Path extends keyof Routes[Method]>(
+        path: Path,
+        ..._args: If<
+            IsEmptyObject<Routes[Method][Path]['arguments']>,
+            [],
+            If<
+                Routes[Method][Path]['_required'],
+                [args: Routes[Method][Path]['arguments']],
+                [args?: Routes[Method][Path]['arguments']]
+            >
+        >
+    ) => Promise<Routes[Method][Path]['responses'][200]>
+}>
 
 export interface TClientOptions {
     errorCallback?: (err: unknown) => void
-    headers?: {
-        [K: string]: string | (() => string)
-    }
+    headers?: Record<string, string | (() => string)>
 }
 
-function defineClient<App extends Application>(
+type RuntimeArguments = {
+    params?: Record<string, unknown>
+    query?: Record<string, unknown>
+    headers?: Record<string, string>
+    cookies?: Record<string, string>
+    body?: unknown
+}
+
+export function defineClient<R extends Router>(
     host: string,
     options?: TClientOptions,
 ) {
     return new Proxy(
         {},
         {
-            get(_target, property) {
-                if (typeof property !== 'string') {
-                    return undefined
+            get(_target, prop: string) {
+                if (!HTTP_METHODS.includes(prop as TRoueMethod)) {
+                    return (() => {
+                        console.error(`Unknown HTTP method: ${prop}`)
+                        return undefined
+                    })()
                 }
 
-                return async (args: {
-                    params?: Record<string, unknown>
-                    query?: Record<string, unknown>
-                    body?: unknown
-                }) => {
-                    console.log('prop', property)
-                    const { method, path } = parseApiName(property)
+                const method = prop as TRoueMethod
 
-                    console.log('method', method)
-                    console.log('path', path)
-
+                return async (path: string, args?: RuntimeArguments) => {
                     let pathname = path
 
+                    // params
                     if (args?.params) {
                         for (const [key, value] of Object.entries(
                             args.params,
                         )) {
+                            const encoded =
+                                value == null
+                                    ? ''
+                                    : encodeURIComponent(String(value))
+
                             pathname = pathname
                                 .replace(
                                     `{/:${key}}`,
-                                    value == null
-                                        ? ''
-                                        : `/${encodeURIComponent(String(value))}`,
+                                    encoded ? `/${encoded}` : '',
                                 )
                                 .replace(
                                     `/:${key}`,
-                                    value == null
-                                        ? ''
-                                        : `/${encodeURIComponent(String(value))}`,
+                                    encoded ? `/${encoded}` : '',
                                 )
                         }
                     }
@@ -242,11 +189,19 @@ function defineClient<App extends Application>(
                         host.endsWith('/') ? host : `${host}/`,
                     )
 
+                    // query
                     if (args?.query) {
                         for (const [key, value] of Object.entries(args.query)) {
-                            if (value == null) continue
+                            if (value == null) {
+                                continue
+                            }
+
                             if (Array.isArray(value)) {
                                 for (const item of value) {
+                                    if (item == null) {
+                                        continue
+                                    }
+
                                     url.searchParams.append(key, String(item))
                                 }
                             } else {
@@ -256,6 +211,8 @@ function defineClient<App extends Application>(
                     }
 
                     const headers = new Headers()
+
+                    // global headers
                     for (const [key, value] of Object.entries(
                         options?.headers ?? {},
                     )) {
@@ -265,37 +222,52 @@ function defineClient<App extends Application>(
                         )
                     }
 
-                    const body = (
-                        args?.body ? JSON.stringify(args.body) : undefined
-                    ) as never
-                    if (body !== undefined) {
-                        headers.set('Content-Type', 'application/json')
+                    // request headers
+                    for (const [key, value] of Object.entries(
+                        args?.headers ?? {},
+                    )) {
+                        headers.set(key, value)
                     }
 
-                    console.log('url', url)
-                    console.log('headers', headers)
+                    const requestInit: RequestInit = {
+                        method,
+                        headers,
+                    }
+
+                    // body
+                    if (args?.body !== undefined) {
+                        requestInit.body = JSON.stringify(args.body)
+
+                        if (!headers.has('Content-Type')) {
+                            headers.set('Content-Type', 'application/json')
+                        }
+                    }
 
                     try {
-                        const res = await fetch(url, {
-                            method,
-                            body,
-                            headers,
-                        })
-                        if (!res.ok) {
-                            throw new Error(res.statusText)
+                        const response = await fetch(url, requestInit)
+
+                        if (!response.ok) {
+                            throw new Error(
+                                `HTTP ${response.status}: ${response.statusText}`,
+                            )
                         }
-                        return res.json()
-                    } catch (err) {
+
+                        const contentType = response.headers.get('content-type')
+
+                        if (contentType?.includes('application/json')) {
+                            return await response.json()
+                        }
+
+                        return await response.text()
+                    } catch (error) {
                         if (options?.errorCallback) {
-                            options.errorCallback(err)
+                            options.errorCallback(error)
                         } else {
-                            throw err
+                            throw error
                         }
                     }
                 }
             },
         },
-    ) as TApplicationToClient<App>
+    ) as RouterToFunctions<R>
 }
-
-export { defineClient }
