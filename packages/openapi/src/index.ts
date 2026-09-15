@@ -21,7 +21,7 @@ declare global {
         }
     }
     namespace ExpressZod {
-        interface TRouteOptions {
+        interface RouteOptions {
             meta?: Except<
                 ZodOpenApiOperationObject,
                 | 'requestBody'

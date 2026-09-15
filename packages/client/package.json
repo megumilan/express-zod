@@ -16,11 +16,19 @@
             "default": "./dist/index.mjs"
         }
     },
+    "files": [
+        "dist",
+        "LICENSE",
+        "README.md"
+    ],
     "scripts": {
         "build": "tsdown"
     },
     "devDependencies": {
         "express-zod": "workspace:*"
     },
-    "packageManager": "pnpm@10.34.4"
+    "packageManager": "pnpm@10.34.4",
+    "publishConfig": {
+        "access": "public"
+    }
 }

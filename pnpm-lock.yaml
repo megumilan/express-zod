@@ -61,10 +61,6 @@ importers:
         version: link:../core
 
   packages/core:
-    dependencies:
-      path-to-regexp:
-        specifier: ^8.4.2
-        version: 8.4.2
     devDependencies:
       express:
         specifier: ^5

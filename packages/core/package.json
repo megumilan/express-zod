@@ -1,6 +1,6 @@
 {
     "name": "express-zod",
-    "version": "0.0.1-alpha.1",
+    "version": "0.0.2-alpha.0",
     "description": "Type-safe, schema-validated routing for Express and Zod",
     "keywords": [
         "express",
@@ -22,11 +22,7 @@
     ],
     "scripts": {
         "build": "tsdown",
-        "dev": "tsx src/index",
         "test:ui": "vitest --ui"
-    },
-    "dependencies": {
-        "path-to-regexp": "^8.4.2"
     },
     "devDependencies": {
         "express": "^5",

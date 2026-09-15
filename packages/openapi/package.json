@@ -1,9 +1,14 @@
 {
     "name": "@express-zod/openapi",
-    "version": "1.0.0",
+    "version": "0.0.1-alpha.0",
     "description": "Express Zod OpenAPI",
-    "keywords": [],
-    "license": "ISC",
+    "keywords": [
+        "Express",
+        "Zod",
+        "OpenAPI",
+        "Scalar"
+    ],
+    "license": "MIT",
     "author": "",
     "type": "module",
     "exports": {
@@ -12,6 +17,11 @@
             "default": "./dist/index.mjs"
         }
     },
+    "files": [
+        "dist",
+        "LICENSE",
+        "README.md"
+    ],
     "scripts": {
         "build": "tsdown"
     },
@@ -22,5 +32,8 @@
     "devDependencies": {
         "express-zod": "workspace:*"
     },
-    "packageManager": "pnpm@10.34.4"
+    "packageManager": "pnpm@10.34.4",
+    "publishConfig": {
+        "access": "public"
+    }
 }
