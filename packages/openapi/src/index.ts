@@ -2,6 +2,7 @@
 
 import type { IRouter } from 'express'
 import type { TPlugin, TRoute, TRouteSchema } from 'express-zod'
+import { merge } from 'lodash-es'
 import type { Except, OmitIndexSignature } from 'type-fest'
 import type { ZodType } from 'zod'
 import {
@@ -41,12 +42,16 @@ type EnabledTags<
     [K in keyof T]: T[K] extends true ? K : never
 }[keyof T]
 
-interface TOpenAPIOptions<Tags = []>
-    extends Except<ZodOpenApiObject, 'paths' | 'tags'> {
-    path?: {
-        json?: string
-        ui?: string
-    }
+interface TOpenAPIPath {
+    json?: string
+    ui?: string
+}
+
+interface TOpenAPIOptions<
+    Path extends TOpenAPIPath = Record<string, unknown>,
+    Tags = [],
+> extends Except<ZodOpenApiObject, 'paths' | 'tags'> {
+    path?: Path | (TOpenAPIPath & {})
     tags?: Tags | (TOpenAPITag[] & {})
 }
 
@@ -204,20 +209,21 @@ export type InferOpenAPITags<T> =
 
 export type InferOpenAPITagNames<T> = keyof InferOpenAPITags<T>
 
-const defaultOptions: Partial<TOpenAPIOptions> = {
+const defaultOptions = {
     path: {
         json: '/openapi.json',
         ui: '/openapi',
     },
 }
 
-function openapi<const Tags extends TOpenAPITag[] = []>(
-    options: TOpenAPIOptions<Tags>,
-): TOpenAPIPlugin<Tags> {
-    options = {
-        ...defaultOptions,
-        ...options,
-    } as never
+function openapi<
+    const Path extends TOpenAPIPath = {},
+    const Tags extends TOpenAPITag[] = [],
+>(options: TOpenAPIOptions<Path, Tags>): TOpenAPIPlugin<Tags> {
+    options = merge({}, defaultOptions, options)
+    if (options.path?.json === options.path?.ui) {
+        throw new Error('OpenAPI JSON path and UI path cannot be the same')
+    }
     return {
         name: 'openapi',
         install: ({ raw, instance }) => {
@@ -225,7 +231,6 @@ function openapi<const Tags extends TOpenAPITag[] = []>(
             const jsonPath = options.path?.json as string
             const uiPath = options.path?.ui as string
             app.get(jsonPath, (_, res) => {
-                console.log(instance.routes)
                 res.json(docsJson(instance.routes, options as never))
             })
             app.get(uiPath, (_, res) => {

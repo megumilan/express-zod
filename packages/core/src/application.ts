@@ -3,7 +3,7 @@ import type { NoExtraKeys, TRouteRecord, TRouterOptions } from './router'
 import { Router } from './router'
 
 export class Application<
-    const Options extends TRouterOptions = {},
+    const Options extends Pick<TRouterOptions, 'prefix'> = {},
     const Routes extends TRouteRecord[] = [],
     const Routers extends Router[] = [],
 > extends Router<Options, Routes, Routers> {
@@ -44,11 +44,3 @@ export class Application<
         return this.getRoutes(this.host.router)
     }
 }
-
-// const app = new Application().get(
-//     '/',
-//     {},
-//     () => {},
-//     () => {},
-// )
-// console.log(app.routes)

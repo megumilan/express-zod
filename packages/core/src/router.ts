@@ -27,8 +27,8 @@ import type { MarkOptionalIfUndefined } from './types/utility'
 
 declare global {
     namespace ExpressZod {
-        interface TRouteOptions {}
-        interface TRouteResponse<
+        interface RouteOptions {}
+        interface RouteResponse<
             Responses extends Record<number, unknown>,
             Locals extends Record<string, unknown> = Record<string, unknown>,
             StatusCode extends keyof Responses = 200,
@@ -38,8 +38,7 @@ declare global {
             > {
             status<const Code extends keyof Responses>(
                 statusCode: Code,
-            ): TRouteResponse<Responses, Locals, Code>
-            // json(body?: Responses[StatusCode]): this
+            ): RouteResponse<Responses, Locals, Code>
             json(
                 ...args: If<
                     IsNever<Responses[StatusCode]>,
@@ -54,7 +53,6 @@ declare global {
 export type NoExtraKeys<T, S> = { [K in keyof T & keyof S]: T[K] } | (S & {})
 
 export interface TRouterOptions extends RouterOptions {
-    /** The prefix applies only to the current router. Other routers registered via the `use` method will not inherit it. */
     prefix?: string
 }
 
@@ -103,7 +101,7 @@ export interface TRouteRecord {
 
 export interface TRouteOptions
     extends Partial<TRouteSchema>,
-        ExpressZod.TRouteOptions {}
+        ExpressZod.RouteOptions {}
 
 type JoinPath<Prefix, Path extends string> = Prefix extends string
     ? Prefix extends ''
@@ -165,7 +163,7 @@ interface TRouteResponse<
     Responses extends Record<number, unknown>,
     Locals extends Record<string, unknown> = Record<string, unknown>,
     StatusCode extends keyof Responses = 200,
-> extends ExpressZod.TRouteResponse<Responses, Locals, StatusCode> {}
+> extends ExpressZod.RouteResponse<Responses, Locals, StatusCode> {}
 
 export type TRouteHandler<
     Options extends TRouteOptions,
@@ -198,7 +196,6 @@ export interface TRouteRegistrar<
     Routers extends Router[],
 > {
     <const Path extends string, const RouteOptions extends TRouteOptions>(
-        // path: If<IsValidPath<Path>, Path, never>,
         path: Path,
         options: IsEmptyObject<RouteOptions> extends true
             ? RouteOptions
@@ -217,36 +214,6 @@ export interface TRouteRegistrar<
             | TRouteHandler<RouteOptions>[]
     ): RedefinedThis<This, Options, Routes, Routers, Method, Path, RouteOptions>
 }
-
-type _PathParams<Path extends string> =
-    Path extends `${infer Before}{/:${infer Optional}}${infer After}`
-        ? Simplify<
-              _PathParams<Before> & {
-                  [K in Optional]?: string
-              } & _PathParams<After>
-          >
-        : Path extends `${infer _Before}/:${infer Param}/${infer Rest}`
-          ? Simplify<{ [K in Param]: string } & _PathParams<`/${Rest}`>>
-          : Path extends `${infer _Before}/:${infer Param}`
-            ? { [K in Param]: string }
-            : {}
-
-type IsValidSegment<S extends string> = S extends `{${infer Inner}}`
-    ? Inner extends `/${string}`
-        ? IsValidPath<Inner extends `/${infer Rest}` ? Rest : never>
-        : false
-    : S extends Lowercase<S>
-      ? S extends `${string}-${string}` | `${string}_${string}`
-          ? false
-          : true
-      : false
-
-/** All path segments must be lowercase and must not contain `-` or `_`. */
-type IsValidPath<S extends string> = S extends `${infer Segment}/${infer Rest}`
-    ? IsValidSegment<Segment> extends true
-        ? IsValidPath<Rest>
-        : false
-    : IsValidSegment<S>
 
 export type TPluginContext = {
     readonly raw: ExpressRouter | Express
@@ -341,16 +308,6 @@ class Router<
                     staticSchema[key] = options[key] as never
                 }
             }
-            // if (isMatchPathParams(path)) {
-            //     const { params, ...rest } = staticSchema
-            //     const paramsInferred = inferPathParamsSchema(path)
-            //     staticSchema = {
-            //         params: params
-            //             ? paramsInferred.extend(params.shape)
-            //             : paramsInferred,
-            //         ...rest,
-            //     }
-            // }
             const { responses: _, ...runtimeSchema } = staticSchema
             if (Object.keys(runtimeSchema).length) {
                 handlers.unshift(schemaValidator(runtimeSchema))

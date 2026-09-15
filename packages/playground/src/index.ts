@@ -64,7 +64,7 @@ const router = new Router({ prefix: '/users' })
 
 const docs = openapi({
     openapi: '3.0.1',
-    info: { title: 'Your API Document', version: '0.0.1' },
+    info: { title: 'My API Document', version: '0.0.1' },
     tags: [
         {
             name: 'User',
@@ -75,6 +75,10 @@ const docs = openapi({
             description: '基础管理',
         },
     ],
+    path: {
+        ui: '/api/openapi',
+        json: '/api/openapi.json',
+    },
 })
 
 export const app = new Application({ prefix: '/api' })
@@ -98,6 +102,8 @@ export const app = new Application({ prefix: '/api' })
     .use(router)
 
 app.listen(3000)
+
+console.log(app.routes)
 
 const _client = defineClient<typeof app>('http://localhost:3000/')
 

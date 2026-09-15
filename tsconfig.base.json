@@ -9,7 +9,14 @@
         "verbatimModuleSyntax": true,
         "esModuleInterop": true,
         "exactOptionalPropertyTypes": true,
-        "types": ["node", "express", "zod", "type-fest", "vitest/globals"],
+        "types": [
+            "node",
+            "express",
+            "zod",
+            "type-fest",
+            "vitest/globals",
+            "lodash-es"
+        ],
         "outDir": "dist",
         "rootDir": ".",
         "declaration": true
