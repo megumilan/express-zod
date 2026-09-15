@@ -1,5 +1,5 @@
 import express, { type Express } from 'express'
-import type { NoExtraKeys, TRouteRecord, TRouterOptions } from './router'
+import type { TRouteRecord, TRouterOptions } from './router'
 import { Router } from './router'
 
 export class Application<
@@ -7,14 +7,7 @@ export class Application<
     const Routes extends TRouteRecord[] = [],
     const Routers extends Router[] = [],
 > extends Router<Options, Routes, Routers> {
-    #host = express()
-    protected get host(): Express {
-        return this.#host
-    }
-
-    constructor(options?: NoExtraKeys<Options, TRouterOptions>) {
-        void super(options)
-    }
+    protected override readonly host: Express = express()
 
     override get get() {
         return this.registerRoute('get')
@@ -38,7 +31,7 @@ export class Application<
         return this.registerRoute('options')
     }
 
-    listen = this.host.listen.bind(this.#host)
+    listen = this.host.listen.bind(this.host)
 
     override get routes() {
         return this.getRoutes(this.host.router)

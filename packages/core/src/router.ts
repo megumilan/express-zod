@@ -273,11 +273,8 @@ class Router<
     const Routes extends TRouteRecord[] = [],
     const Routers extends Router[] = [],
 > {
-    #host = ExpressRouter()
     protected readonly _options?: TRouterOptions
-    protected get host(): IRouter {
-        return this.#host
-    }
+    protected readonly host: IRouter = ExpressRouter()
 
     constructor(options?: NoExtraKeys<Options, TRouterOptions>) {
         this._options = (options || {}) as Options
