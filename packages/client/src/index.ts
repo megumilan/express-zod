@@ -1,9 +1,8 @@
-import {
-    HTTP_METHODS,
-    type Router,
-    type TRoueMethod,
-    type TRouteOptions,
-    type TRouteRecord,
+import type {
+    Router,
+    TRoueMethod,
+    TRouteOptions,
+    TRouteRecord,
 } from 'express-zod'
 import type {
     ArrayLength,
@@ -15,6 +14,16 @@ import type {
     Writable,
 } from 'type-fest'
 import type { output } from 'zod'
+
+const HTTP_METHODS = [
+    'get',
+    'post',
+    'put',
+    'patch',
+    'delete',
+    'head',
+    'options',
+] as const
 
 type MarkOptionalIfNoRequiredKeys<T extends object> = Simplify<
     {
@@ -80,7 +89,7 @@ type InferOptions<
         : { 200: unknown }
 }>
 
-type RouterRecords<R extends Router> =
+type RouterRecords<R> =
     R extends Router<infer _, infer Routes, infer Routers>
         ? {
               [Method in Routes[number] extends infer Route
@@ -102,7 +111,7 @@ type RouterRecords<R extends Router> =
         : {}
 
 type RouterToFunctions<
-    R extends Router,
+    R,
     Routes extends Record<
         string,
         Record<
@@ -142,10 +151,7 @@ type RuntimeArguments = {
     body?: unknown
 }
 
-export function defineClient<R extends Router>(
-    host: string,
-    options?: TClientOptions,
-) {
+export function defineClient<R>(host: string, options?: TClientOptions) {
     return new Proxy(
         {},
         {
