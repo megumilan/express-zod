@@ -6,7 +6,7 @@
 }
 
 @font-face {
-    font-family: "Hack";
+    font-family: "HNF";
     src: url("./assets/HackNerdFont-Regular.ttf") format(truetype);
     font-style: normal;
     font-weight: normal;
@@ -14,5 +14,9 @@
 
 @theme {
     --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
-    --font-mono: "Hack", ui-monospace, "Cascadia Mono", Consolas, monospace;
+    --font-mono: "HNF", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+.monaco-editor * {
+    font-family: var(--font-mono);
 }

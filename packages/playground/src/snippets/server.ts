@@ -12,6 +12,7 @@ const userSchema = z.object({
 
 const createUserSchema = userSchema.omit({ id: true })
 
+// OpenAPI plugin
 const docs = openapi({
     openapi: '3.0.1',
     info: {
@@ -20,6 +21,7 @@ const docs = openapi({
     },
     tags: [
         {
+            // Changing this tag to break all associated routes
             name: 'User',
         },
     ],
@@ -30,8 +32,8 @@ const users = new Router({ prefix: '/users' })
         '/',
         {
             query: z.object({
-                page: z.coerce.number().int().min(1).default(1),
-                limit: z.coerce.number().int().min(1).max(100).default(10),
+                page: z.number().int().min(1).default(1),
+                limit: z.number().int().min(1).max(100).default(10),
             }),
             responses: {
                 200: z.object({
@@ -39,7 +41,11 @@ const users = new Router({ prefix: '/users' })
                     total: z.number().int(),
                 }),
             },
-            meta: { summary: 'List users', tags: ['User'] },
+            meta: {
+                summary: 'List users',
+                /** Type-safe tags. see {@link ExpressZodOpenAPI.Tags} */
+                tags: ['User'],
+            },
         },
         (req, res) => {
             const { page } = req.query
@@ -54,7 +60,7 @@ const users = new Router({ prefix: '/users' })
     .get(
         '/:id',
         {
-            params: z.object({ id: z.coerce.number().int().positive() }),
+            params: z.object({ id: z.number().int().positive() }),
             responses: {
                 200: userSchema,
                 404: z.object({ message: z.string() }),
@@ -99,6 +105,7 @@ export type App = typeof app
 
 declare global {
     namespace ExpressZodOpenAPI {
+        // Define the Type-safe tags
         interface Tags extends InferOpenAPITags<typeof docs> {}
     }
 }

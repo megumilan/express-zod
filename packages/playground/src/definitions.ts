@@ -9,6 +9,8 @@ export const definitions = import.meta.glob(
 
         '../node_modules/@express-zod/client/dist/index.d.mts',
         '../node_modules/@express-zod/openapi/dist/index.d.mts',
+        '../node_modules/type-fest/**/*.d.ts',
+        '../node_modules/zod-openapi/**/*.d.mts',
 
         '../node_modules/zod/**/*.d.ts',
         '../node_modules/zod/**/*.d.mts',
@@ -38,6 +40,8 @@ export const modulePaths = {
     '@express-zod/openapi': [
         'node_modules/@express-zod/openapi/dist/index.d.mts',
     ],
+    'type-fest': ['node_modules/type-fest/index.d.ts'],
+    'zod-openapi': ['node_modules/zod-openapi/lib/index.d.mts'],
 }
 
 export const dependencies = {

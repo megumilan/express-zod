@@ -19,6 +19,17 @@ self.MonacoEnvironment = {
     },
 }
 
+function ensureFontsLoaded(callback: () => void) {
+    document.fonts.ready.then(() => {
+        monaco.editor.remeasureFonts()
+        callback()
+    })
+}
+
+ensureFontsLoaded(() => {
+    console.log('Fonts loaded and remeasured')
+})
+
 function configureTypescript() {
     const defaults = monaco.typescript.typescriptDefaults
 
@@ -42,6 +53,10 @@ function configureTypescript() {
     })
 
     defaults.setEagerModelSync(true)
+
+    defaults.setInlayHintsOptions({
+        includeInlayParameterNameHints: 'all',
+    })
 }
 configureTypescript()
 
@@ -51,8 +66,8 @@ const editorOptions: monaco.editor.IStandaloneEditorConstructionOptions = {
     minimap: { enabled: false },
     fontFamily: 'Hack Nerd Font',
     codeLensFontFamily: 'Hack Nerd Font',
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 16,
+    lineHeight: 2,
     smoothScrolling: true,
     padding: { top: 12 },
     scrollBeyondLastLine: false,
@@ -60,6 +75,12 @@ const editorOptions: monaco.editor.IStandaloneEditorConstructionOptions = {
     renderWhitespace: 'selection',
     quickSuggestions: { other: true, comments: false, strings: true },
     scrollbar: { vertical: 'auto', horizontal: 'auto' },
+    inlayHints: {
+        enabled: 'on',
+    },
+    mouseWheelScrollSensitivity: 3,
+    cursorSmoothCaretAnimation: 'on',
+    inertialScroll: true,
 }
 
 export const serverModel = monaco.editor.createModel(

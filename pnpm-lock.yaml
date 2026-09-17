@@ -126,18 +126,27 @@ importers:
         specifier: ^5.2.1
         version: 5.2.1
       express-zod:
-        specifier: 0.0.2-alpha.1
-        version: 0.0.2-alpha.1(express@5.2.1)(zod@4.6.5)
+        specifier: 0.0.2-alpha.2
+        version: 0.0.2-alpha.2(express@5.2.1)(zod@4.6.5)
       monaco-editor:
         specifier: ^0.56.0
         version: 0.56.0
+      type-fest:
+        specifier: 'catalog:'
+        version: 5.9.0
       zod:
         specifier: ^4.6.5
         version: 4.6.5
+      zod-openapi:
+        specifier: ^6.0.2
+        version: 6.0.2(zod@4.6.5)
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@8.3.0(@types/node@26.5.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
+      '@types/body-parser':
+        specifier: ^1.19.6
+        version: 1.19.6
       '@types/cors':
         specifier: ^2.8.19
         version: 2.8.19
@@ -1015,8 +1024,8 @@ packages:
     resolution: {integrity: sha512-KfYbmpRm0VbLjEvVa9yGwCi9GI34xvi7A/HXYWQO65CSD2u3MczUJSuwXKFIxlGsgBQizV9q5J9NHj4VG0n+pA==}
     engines: {node: '>=12.0.0'}
 
-  express-zod@0.0.2-alpha.1:
-    resolution: {integrity: sha512-PX77RZ2l8jYZHJ4vlX0InmIZdkSV/OXVB5EGWLIfbLO6FXwzqb6jSRAq5VjEF1X4d9ZjfV9Bfu71KK8IiPYQrA==}
+  express-zod@0.0.2-alpha.2:
+    resolution: {integrity: sha512-dmjMzAlW0kU0HjChT/uuZR9PTUPqrsuCEyUoOeTV7R4uGbfDtJLP9dYvvs4VGYvaRrOl44Qc+Hn6T3knT6CCZQ==}
     peerDependencies:
       express: ^5
       zod: ^4
@@ -1593,6 +1602,10 @@ packages:
     resolution: {integrity: sha512-BL5MGkRln6aDYhb0xbQlEAGw743BaZYWdbWtdJOBriYJboKgUUYCadFp2/FpBBZquBC/ezNBn7wMMPx7FDZUDw==}
     engines: {node: '>=18.0.0'}
     hasBin: true
+
+  type-fest@5.10.0:
+    resolution: {integrity: sha512-NoSdpq/WEiAg5sjmBkmV/hfxv6HJH4NqPNrqjtSO5CwRmpsDfaf4begxW34KdJykH/l1yHtwBWQkCRdoXO8mPA==}
+    engines: {node: '>=20'}
 
   type-fest@5.9.0:
     resolution: {integrity: sha512-yANm3Jr3GiJ1qgJlxGAVxTOIcEOk1rhQHamlXtnrCK7EHP4HeM9OGxtMg/W7HFdrVzw/ZWJKGVIJusVH85sLtw==}
@@ -2371,9 +2384,10 @@ snapshots:
 
   expect-type@1.4.0: {}
 
-  express-zod@0.0.2-alpha.1(express@5.2.1)(zod@4.6.5):
+  express-zod@0.0.2-alpha.2(express@5.2.1)(zod@4.6.5):
     dependencies:
       express: 5.2.1
+      type-fest: 5.10.0
       zod: 4.6.5
 
   express@5.2.1:
@@ -2920,6 +2934,10 @@ snapshots:
       esbuild: 0.28.2
     optionalDependencies:
       fsevents: 2.3.3
+
+  type-fest@5.10.0:
+    dependencies:
+      tagged-tag: 1.0.0
 
   type-fest@5.9.0:
     dependencies:
