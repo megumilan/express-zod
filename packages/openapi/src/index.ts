@@ -92,7 +92,8 @@ function toOpenapiSchema(schema: TRouteSchema) {
         }
 
         if (key === 'responses') {
-            const _responses = schema as Record<number, ZodType>
+            // biome-ignore lint/suspicious/noExplicitAny: <avoid>
+            const _responses = schema as Record<number, ZodType<any, any, any>>
 
             acc.responses = Object.entries(_responses).reduce(
                 (acc, [key, schema]) => {

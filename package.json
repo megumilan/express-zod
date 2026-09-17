@@ -2,16 +2,21 @@
     "name": "express-zod-repo",
     "version": "1.0.0",
     "description": "",
-    "keywords": [],
-    "license": "ISC",
-    "author": "",
+    "keywords": [
+        "express",
+        "zod"
+    ],
+    "license": "MIT",
+    "author": "megumilan",
     "type": "module",
     "main": "index.js",
     "scripts": {
+        "build": "pnpm -r build",
         "format": "biome check --write .",
         "lint": "biome lint .",
         "prepare": "husky",
-        "test": "vitest"
+        "test": "vitest",
+        "test:ui": "vitest --ui"
     },
     "lint-staged": {
         "*.{js,ts,cjs,mjs,d.cts,d.mts,jsx,tsx,json,jsonc,css}": [
@@ -24,7 +29,6 @@
     "devDependencies": {
         "@biomejs/biome": "2.5.12",
         "@types/express": "^5.0.6",
-        "@types/lodash-es": "^4.17.12",
         "@types/node": "^26.5.0",
         "@types/supertest": "^7.2.1",
         "@vitest/ui": "^5.0.0",
@@ -33,7 +37,6 @@
         "supertest": "^7.2.2",
         "tsdown": "^0.23.0",
         "tsx": "^4.23.13",
-        "type-fest": "^5.9.0",
         "typescript": "^6.0.3",
         "vitest": "^5.0.0",
         "zod": "^4.5.4"

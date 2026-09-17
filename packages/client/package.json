@@ -24,8 +24,14 @@
     "scripts": {
         "build": "tsdown"
     },
+    "dependencies": {
+        "type-fest": "catalog:"
+    },
     "devDependencies": {
         "express-zod": "workspace:*"
+    },
+    "peerDependencies": {
+        "express-zod": "*"
     },
     "packageManager": "pnpm@10.34.4",
     "publishConfig": {

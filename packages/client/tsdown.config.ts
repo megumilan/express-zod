@@ -1,12 +1,3 @@
-import { defineConfig } from 'tsdown'
+import { defineTsdown } from '../../tsdown.config.base.ts'
 
-export default defineConfig({
-    entry: ['./src/index.ts'],
-    outDir: 'dist',
-    format: ['esm'],
-    dts: true,
-    deps: {
-        neverBundle: true,
-        alwaysBundle: ['type-fest'],
-    },
-})
+export default defineTsdown()
