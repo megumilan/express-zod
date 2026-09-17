@@ -22,10 +22,10 @@ export type App = typeof app;
 ```ts
 // in client
 import { defineClient } from "@express-zod/client";
-import type { App } from "path/to/your/server";
+import type { App } from "path/to/your/server/package";
 
 const client = defineClient<App>("http://localhost:3000/");
-client.hello();
+client.get("/hello");
 ```
 
 ## License
