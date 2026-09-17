@@ -9,5 +9,5 @@ void client.get('/api/users/:id', { params: { id: 1 } }).then((resp) => {
     console.log('resp is', resp) // typed response
 })
 
-// Error: Property 'name' is missing in type '{ email: string; }' but required in type '{ name: string; email: string; }'.
-void client.post('/api/users', { body: { email: '' } })
+// Remove the `name` -> Property 'name' is missing in type '{ email: string; }' but required in type '{ name: string; email: string; }'.
+void client.post('/api/users', { body: { email: '', name: '' } })
