@@ -231,13 +231,13 @@ export interface TRoute extends IRoute {
     routeOptions: TRouteOptions
 }
 
-type PrefixOf<O extends TRouterOptions> = O extends {
+export type PrefixOf<O extends TRouterOptions> = O extends {
     prefix: infer P extends string
 }
     ? P
     : ''
 
-type UpdateFullPath<R extends Router, Prefix extends string> =
+export type UpdateFullPath<R extends Router, Prefix extends string> =
     R extends Router<infer Options, infer Routes, infer Routers>
         ? Router<
               Options,
@@ -360,23 +360,25 @@ class Router<
         return this.registerRoute('options')
     }
 
-    use(middleware: RequestHandler | ErrorRequestHandler): this
+    use<const M extends RequestHandler | ErrorRequestHandler>(
+        middleware: M,
+    ): this
+    use<const P extends TPlugin>(plugin: P): this
     use<const R extends Router>(
         router: R,
-    ): this extends Application
-        ? Application<
-              Options,
-              Routes,
-              [...Routers, UpdateFullPath<R, PrefixOf<Options>>]
-          >
-        : Router<
-              Options,
-              Routes,
-              [...Routers, UpdateFullPath<R, PrefixOf<Options>>]
-          >
-    use(plugin: TPlugin): this
-    use<const R extends Router>(
-        target: RequestHandler | ErrorRequestHandler | R | TPlugin,
+    ): Router<
+        Options,
+        Routes,
+        [...Routers, UpdateFullPath<R, PrefixOf<Options>>]
+    >
+    use<const T extends Router>(
+        target: RequestHandler | ErrorRequestHandler | T | TPlugin,
+    ) {
+        return this.handleUse(target)
+    }
+
+    protected handleUse<const T extends Router>(
+        target: RequestHandler | ErrorRequestHandler | T | TPlugin,
     ) {
         if (typeof target === 'function') {
             this.host.use(target)
@@ -392,8 +394,8 @@ class Router<
             })
         }
         return this as
-            | Application<Options, Routes, [...Routers, R]>
-            | Router<Options, Routes, [...Routers, R]>
+            | Application<Options, Routes, [...Routers, T]>
+            | Router<Options, Routes, [...Routers, T]>
     }
 
     protected getRoutes(router: IRouter) {

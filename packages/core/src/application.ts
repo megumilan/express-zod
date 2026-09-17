@@ -1,5 +1,15 @@
-import express, { type Express } from 'express'
-import type { TRouteRecord, TRouterOptions } from './router'
+import express, {
+    type ErrorRequestHandler,
+    type Express,
+    type RequestHandler,
+} from 'express'
+import type {
+    PrefixOf,
+    TPlugin,
+    TRouteRecord,
+    TRouterOptions,
+    UpdateFullPath,
+} from './router'
 import { Router } from './router'
 
 export class Application<
@@ -29,6 +39,23 @@ export class Application<
     }
     override get options() {
         return this.registerRoute('options')
+    }
+
+    override use<const M extends RequestHandler | ErrorRequestHandler>(
+        middleware: M,
+    ): this
+    override use<const P extends TPlugin>(plugin: P): this
+    override use<const R extends Router>(
+        router: R,
+    ): Application<
+        Options,
+        Routes,
+        [...Routers, UpdateFullPath<R, PrefixOf<Options>>]
+    >
+    override use<const T extends Router>(
+        target: RequestHandler | ErrorRequestHandler | T | TPlugin,
+    ) {
+        return this.handleUse(target)
     }
 
     listen = this.host.listen.bind(this.host)
