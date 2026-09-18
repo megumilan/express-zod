@@ -99,11 +99,9 @@ async function pipeSSE(
 ) {
     let closeReason: unknown
     res.on('error', (error) => {
-        console.log('error', error)
         closeReason = error
     })
     res.socket?.on('error', (error) => {
-        console.log('socket error', error)
         closeReason = error
     })
     if (!res.headersSent) {
