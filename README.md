@@ -4,6 +4,8 @@ Type-safe, schema-validated routing for [Express](https://expressjs.com/) and [Z
 
 `express-zod` lets you describe every part of a route — `params`, `query`, `body`, `responses`, `headers`, and `cookies` — with Zod schemas. Your request and response handlers become fully typed, and invalid input is rejected before your code ever runs.
 
+[Playground](https://megumilan.github.io/express-zod/)
+
 ## Features
 
 - **Schema-validated routing** — declare `params`, `query`, `body`, `responses`, `headers`, and `cookies` per route with Zod.
