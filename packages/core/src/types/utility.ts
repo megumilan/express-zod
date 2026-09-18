@@ -1,4 +1,4 @@
-import type { Simplify } from 'type-fest'
+import type { If, IsAny, IsNever, Simplify } from 'type-fest'
 
 export type MarkOptionalIfUndefined<T> = T extends unknown
     ? Simplify<
@@ -12,3 +12,6 @@ export type MarkOptionalIfUndefined<T> = T extends unknown
           }
       >
     : never
+
+/** Fallback when T is any or never */
+export type IsUnexpected<T, Fallback> = If<IsAny<T> | IsNever<T>, Fallback, T>

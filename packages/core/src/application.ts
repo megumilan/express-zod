@@ -9,8 +9,10 @@ import type {
     TRouteRecord,
     TRouterOptions,
     UpdateFullPath,
+    UpdateRoutesFullPath,
 } from './router'
 import { Router } from './router'
+import type { IsUnexpected } from './types/utility'
 
 export class Application<
     const Options extends Pick<TRouterOptions, 'prefix'> = {},
@@ -44,7 +46,6 @@ export class Application<
     override use<const M extends RequestHandler | ErrorRequestHandler>(
         middleware: M,
     ): this
-    override use<const P extends TPlugin>(plugin: P): this
     override use<const R extends Router>(
         router: R,
     ): Application<
@@ -52,6 +53,21 @@ export class Application<
         Routes,
         [...Routers, UpdateFullPath<R, PrefixOf<Options>>]
     >
+    use<const P extends TPlugin>(
+        plugin: P,
+    ): P extends TPlugin<infer _Routes>
+        ? IsUnexpected<
+              Application<
+                  Options,
+                  [
+                      ...Routes,
+                      ...UpdateRoutesFullPath<_Routes, PrefixOf<Options>>,
+                  ],
+                  Routers
+              >,
+              this
+          >
+        : this
     override use<const T extends Router>(
         target: RequestHandler | ErrorRequestHandler | T | TPlugin,
     ) {

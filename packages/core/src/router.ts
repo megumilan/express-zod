@@ -23,7 +23,7 @@ import type {
 import type { output, ZodObject, ZodType } from 'zod'
 import type { Application } from './application'
 import { schemaValidator } from './schema-validator'
-import type { MarkOptionalIfUndefined } from './types/utility'
+import type { IsUnexpected, MarkOptionalIfUndefined } from './types/utility'
 
 declare global {
     namespace ExpressZod {
@@ -220,7 +220,7 @@ export type TPluginContext = {
     readonly instance: Router | Application
 }
 
-export interface TPlugin {
+export interface TPlugin<_Routes extends TRouteRecord[] = []> {
     readonly name: string
     readonly install: (ctx: TPluginContext) => void
 }
@@ -237,23 +237,28 @@ export type PrefixOf<O extends TRouterOptions> = O extends {
     ? P
     : ''
 
+export type UpdateRoutesFullPath<
+    Routes extends TRouteRecord[],
+    Prefix extends string,
+> = {
+    [K in keyof Routes]: Routes[K] extends {
+        fullPath: infer FullPath extends string
+    }
+        ? Simplify<
+              Omit<Routes[K], 'fullPath'> & {
+                  fullPath: JoinPath<Prefix, FullPath>
+              }
+          >
+        : Routes[K]
+} extends infer Routes
+    ? Routes extends readonly TRouteRecord[]
+        ? Routes
+        : never
+    : never
+
 export type UpdateFullPath<R extends Router, Prefix extends string> =
     R extends Router<infer Options, infer Routes, infer Routers>
-        ? Router<
-              Options,
-              {
-                  [K in keyof Routes]: Routes[K] extends {
-                      fullPath: infer FullPath extends string
-                  }
-                      ? Simplify<
-                            Omit<Routes[K], 'fullPath'> & {
-                                fullPath: JoinPath<Prefix, FullPath>
-                            }
-                        >
-                      : Routes[K]
-              },
-              Routers
-          >
+        ? Router<Options, UpdateRoutesFullPath<Routes, Prefix>, Routers>
         : never
 
 function joinPath<const Prefix extends string, const Path extends string>(
@@ -363,7 +368,21 @@ class Router<
     use<const M extends RequestHandler | ErrorRequestHandler>(
         middleware: M,
     ): this
-    use<const P extends TPlugin>(plugin: P): this
+    use<const P extends TPlugin>(
+        plugin: P,
+    ): P extends TPlugin<infer _Routes>
+        ? IsUnexpected<
+              Router<
+                  Options,
+                  [
+                      ...Routes,
+                      ...UpdateRoutesFullPath<_Routes, PrefixOf<Options>>,
+                  ],
+                  Routers
+              >,
+              this
+          >
+        : this
     use<const R extends Router>(
         router: R,
     ): Router<
