@@ -23,6 +23,7 @@ import type {
 import type { output, ZodObject, ZodType } from 'zod'
 import type { Application } from './application'
 import { schemaValidator } from './schema-validator'
+import { type SSEContext, sseMiddleware } from './sse'
 import type { IsUnexpected, MarkOptionalIfUndefined } from './types/utility'
 
 declare global {
@@ -47,6 +48,18 @@ declare global {
                 >
             ): this
         }
+    }
+}
+
+declare global {
+    namespace ExpressZod {
+        interface RouteResponse<
+            Responses extends Record<number, unknown>,
+            Locals extends Record<string, unknown> = Record<string, unknown>,
+            StatusCode extends keyof Responses = 200,
+        > extends SSEContext<
+                If<IsNever<Responses[200]>, unknown, Responses[200]>
+            > {}
     }
 }
 
@@ -311,6 +324,7 @@ class Router<
                 }
             }
             const { responses: _, ...runtimeSchema } = staticSchema
+            handlers.unshift(sseMiddleware)
             if (Object.keys(runtimeSchema).length) {
                 handlers.unshift(schemaValidator(runtimeSchema))
             }
