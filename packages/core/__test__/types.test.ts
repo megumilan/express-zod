@@ -52,4 +52,41 @@ describe('route types', () => {
             },
         )
     })
+
+    it('types res.write against the responses schema', () => {
+        new Application().get(
+            '/events',
+            {
+                sse: true,
+                responses: { 200: z.object({ message: z.string() }) },
+            },
+            (_req, res) => {
+                res.write({ message: 'hello' })
+                res.write({ message: 'world' }, (error) => {
+                    error satisfies Error | null | undefined
+                })
+                res.write({ message: 'hello' }, 'utf8', (error) => {
+                    error satisfies Error | null | undefined
+                })
+                // @ts-expect-error chunk must match responses[200]
+                res.write({ nope: true })
+                // @ts-expect-error chunk must match responses[200]
+                res.write('plain string')
+            },
+        )
+    })
+
+    it('accepts sse as a boolean route option and writes free-form chunks', () => {
+        new Application().get('/events', { sse: true }, (_req, res) => {
+            res.write('hello')
+            res.write({ any: 'chunk' })
+            res.end()
+        })
+        new Application().get(
+            '/typed-events',
+            // @ts-expect-error sse must be a boolean
+            { sse: 'yes' },
+            () => undefined,
+        )
+    })
 })

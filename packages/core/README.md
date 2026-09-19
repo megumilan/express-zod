@@ -10,7 +10,7 @@ Validate request bodies, query strings, path params, headers and cookies against
 - **End-to-end type inference** — route handlers are typed from your schemas, including response shapes for `res.json()`
 - **Chainable API** — `new Application().get('/users', {...}, handler)`
 - **Modular routers** — compose routers with automatic prefix composition in route metadata
-- **Server-Sent Events** — first-class SSE support typed against your `responses` schemas
+- **Server-Sent Events** — opt-in SSE responses that set the event-stream headers for you and type-check `res.write()` against your `responses` schemas
 - **Plugin system** — extend route registration with reusable plugins
 - **Runtime metadata** — inspect registered routes (`path`, `method`, `fullPath`, schemas) for docs or tooling
 
@@ -49,14 +49,15 @@ Invalid requests are forwarded to your error middleware as `z.ZodError` (Status 
 
 Declare a schema object as the first argument after the path. Each key is optional:
 
-| Key         | Zod type                  | Validates               |
-| ----------- | ------------------------- | ----------------------- |
-| `params`    | `ZodObject`               | URL path params         |
-| `query`     | `ZodObject`               | query string            |
-| `body`      | `ZodType`                 | request body            |
-| `headers`   | `ZodObject`               | request headers         |
-| `cookies`   | `ZodObject`               | request cookies         |
-| `responses` | `Record<status, ZodType>` | response type contracts |
+| Key         | Zod type                  | Validates                                               |
+| ----------- | ------------------------- | ------------------------------------------------------- |
+| `params`    | `ZodObject`               | URL path params                                         |
+| `query`     | `ZodObject`               | query string                                            |
+| `body`      | `ZodType`                 | request body                                            |
+| `headers`   | `ZodObject`               | request headers                                         |
+| `cookies`   | `ZodObject`               | request cookies                                         |
+| `responses` | `Record<status, ZodType>` | response type contracts                                 |
+| `sse`       | `boolean`                 | auto-send event-stream headers and format `res.write()` |
 
 ```ts
 import { z } from "zod";
@@ -139,26 +140,23 @@ Routers can be nested inside other routers, and prefixes compose through every l
 
 ### Server-Sent Events
 
-`res.sse()` streams values from a single value, an iterable, or an async iterable. When a `responses` schema is present, event payloads are type-checked against `responses[200]`.
+Set `sse: true` on a route to stream `text/event-stream` responses. The library sets the SSE headers (`Content-Type`, `Cache-Control`, `Connection`, `X-Accel-Buffering`) and flushes them for you, then formats every `res.write()` call as an SSE `data:` event — including the trailing newlines.
 
 ```ts
 app.get(
     "/events",
-    { responses: { 200: z.object({ message: z.string() }) } },
+    { sse: true, responses: { 200: z.object({ message: z.string() }) } },
     (_req, res) => {
-        res.sse(
-            (async function* () {
-                yield { message: "hello" };
-                yield { event: "update", data: { message: "world" } };
-            })(),
-        );
+        res.write({ message: "hello" });
+        res.write({ message: "world" });
+        res.end();
     },
 );
 ```
 
-- Plain values are serialized as `data:` lines (strings and objects, `JSON.stringify`ed)
-- `{ event, data }` chunks emit a named SSE event
-- `res.sse(...)` returns a controller with `.onCancel(...)` and `.cancel(reason?)` to react to client disconnects
+- When a `responses` schema is present, `res.write()` chunks are type-checked against `responses[200]`
+- Strings and objects are serialized as `data:` lines (objects via `JSON.stringify`); multi-line strings become one `data:` line per line
+- Without `sse: true`, `res.write()` behaves like the raw Express `write` with no formatting
 
 ### Plugins
 
@@ -215,7 +213,7 @@ A mountable, non-listenable router. Same route registration API as `Application`
 ```ts
 type Handler = (
     req: Request, // typed params, query, body, headers, cookies
-    res: TRouteResponse, // typed status()/json()/sse()
+    res: TRouteResponse, // typed status()/json()/write()
     next: NextFunction,
 ) => unknown;
 ```

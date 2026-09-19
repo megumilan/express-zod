@@ -15,6 +15,3 @@ export type MarkOptionalIfUndefined<T> = T extends unknown
 
 /** Fallback when T is any or never */
 export type IsUnexpected<T, Fallback> = If<IsAny<T> | IsNever<T>, Fallback, T>
-
-/** The stream accepted by `res.sse`, yielding one SSE event per chunk */
-export type SSEStream<T> = Iterable<T> | AsyncIterable<T>

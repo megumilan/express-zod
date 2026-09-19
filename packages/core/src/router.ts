@@ -23,7 +23,7 @@ import type {
 import type { output, ZodObject, ZodType } from 'zod'
 import type { Application } from './application'
 import { schemaValidator } from './schema-validator'
-import { type SSEContext, sseMiddleware } from './sse'
+import { createSSEMiddleware } from './sse'
 import type { IsUnexpected, MarkOptionalIfUndefined } from './types/utility'
 
 declare global {
@@ -35,7 +35,7 @@ declare global {
             StatusCode extends keyof Responses = 200,
         > extends Omit<
                 Response<Responses[StatusCode], Locals>,
-                'status' | 'json'
+                'status' | 'json' | 'write'
             > {
             status<const Code extends keyof Responses>(
                 statusCode: Code,
@@ -47,19 +47,16 @@ declare global {
                     [body: Responses[StatusCode]]
                 >
             ): this
+            write(
+                chunk: Responses[StatusCode],
+                callback?: (error: Error | null | undefined) => void,
+            ): boolean
+            write(
+                chunk: Responses[StatusCode],
+                encoding: BufferEncoding,
+                callback?: (error: Error | null | undefined) => void,
+            ): boolean
         }
-    }
-}
-
-declare global {
-    namespace ExpressZod {
-        interface RouteResponse<
-            Responses extends Record<number, unknown>,
-            Locals extends Record<string, unknown> = Record<string, unknown>,
-            StatusCode extends keyof Responses = 200,
-        > extends SSEContext<
-                If<IsNever<Responses[200]>, unknown, Responses[200]>
-            > {}
     }
 }
 
@@ -114,7 +111,9 @@ export interface TRouteRecord {
 
 export interface TRouteOptions
     extends Partial<TRouteSchema>,
-        ExpressZod.RouteOptions {}
+        ExpressZod.RouteOptions {
+    sse?: boolean
+}
 
 type JoinPath<Prefix, Path extends string> = Prefix extends string
     ? Prefix extends ''
@@ -324,7 +323,9 @@ class Router<
                 }
             }
             const { responses: _, ...runtimeSchema } = staticSchema
-            handlers.unshift(sseMiddleware)
+            if (options.sse) {
+                handlers.unshift(createSSEMiddleware())
+            }
             if (Object.keys(runtimeSchema).length) {
                 handlers.unshift(schemaValidator(runtimeSchema))
             }
