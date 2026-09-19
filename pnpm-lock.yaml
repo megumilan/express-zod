@@ -99,11 +99,11 @@ importers:
   packages/playground:
     dependencies:
       '@express-zod/client':
-        specifier: 0.0.1-alpha.0
-        version: 0.0.1-alpha.0
+        specifier: 0.0.1-alpha.2
+        version: 0.0.1-alpha.2(express-zod@0.0.2-alpha.4(express@5.2.1)(zod@4.6.5))
       '@express-zod/openapi':
-        specifier: 0.0.1-alpha.0
-        version: 0.0.1-alpha.0(zod@4.6.5)
+        specifier: 0.0.1-alpha.2
+        version: 0.0.1-alpha.2(express-zod@0.0.2-alpha.4(express@5.2.1)(zod@4.6.5))(zod@4.6.5)
       '@fontsource-variable/inter':
         specifier: ^5.3.0
         version: 5.3.0
@@ -126,8 +126,8 @@ importers:
         specifier: ^5.2.1
         version: 5.2.1
       express-zod:
-        specifier: 0.0.2-alpha.2
-        version: 0.0.2-alpha.2(express@5.2.1)(zod@4.6.5)
+        specifier: 0.0.2-alpha.4
+        version: 0.0.2-alpha.4(express@5.2.1)(zod@4.6.5)
       monaco-editor:
         specifier: ^0.56.0
         version: 0.56.0
@@ -384,11 +384,15 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@express-zod/client@0.0.1-alpha.0':
-    resolution: {integrity: sha512-9UNIxsN1eQOBiF2T5DZJg9gpCLK1hht/PmDIwEVPPMGsZE1FDk13M46fKqkuC1Rye+lsOUXK/H81mnn8Ny5m/g==}
+  '@express-zod/client@0.0.1-alpha.2':
+    resolution: {integrity: sha512-J/KhOXqTyaxWCxC1e8sPDGqBPutOmsksCJaP15fHmTUgJwG1T+heAe1YK2PiKecPPrBjTMf69b4GK3ddufsxKA==}
+    peerDependencies:
+      express-zod: '*'
 
-  '@express-zod/openapi@0.0.1-alpha.0':
-    resolution: {integrity: sha512-2OlV7zXS4jvfVJ1cHmU3QFnpRR5FRQJEsr2gEOc80Clj5+8XtRgppxsahiP/vfEVM8flR7gYaPxuiga5oKOWfg==}
+  '@express-zod/openapi@0.0.1-alpha.2':
+    resolution: {integrity: sha512-VE5rUtcO8WkpFlS0gsIrXeQG3Wt3To9IdO1xXOodU/lnl+IA/88c4QSghFIdCcyRuFejUaZv2AyoBjxIElTmrA==}
+    peerDependencies:
+      express-zod: '*'
 
   '@fontsource-variable/inter@5.3.0':
     resolution: {integrity: sha512-OupL48va4JNofb97w6NYeF9S7W/kHNKM0Er8Dem5nqi4jeOLrVJDoE8tZEpnMJmtkvNbB1EIPPwHcdkF6b1oUA==}
@@ -1024,8 +1028,8 @@ packages:
     resolution: {integrity: sha512-KfYbmpRm0VbLjEvVa9yGwCi9GI34xvi7A/HXYWQO65CSD2u3MczUJSuwXKFIxlGsgBQizV9q5J9NHj4VG0n+pA==}
     engines: {node: '>=12.0.0'}
 
-  express-zod@0.0.2-alpha.2:
-    resolution: {integrity: sha512-dmjMzAlW0kU0HjChT/uuZR9PTUPqrsuCEyUoOeTV7R4uGbfDtJLP9dYvvs4VGYvaRrOl44Qc+Hn6T3knT6CCZQ==}
+  express-zod@0.0.2-alpha.4:
+    resolution: {integrity: sha512-m94ryKsrFaUfgzxkikhxK+yrGi5ZOcx9kDw16pe5EorSZ9zO4Xm9lecBKT49rm3uXgt4NnXL56yIkGvOHbpHVQ==}
     peerDependencies:
       express: ^5
       zod: ^4
@@ -1603,10 +1607,6 @@ packages:
     engines: {node: '>=18.0.0'}
     hasBin: true
 
-  type-fest@5.10.0:
-    resolution: {integrity: sha512-NoSdpq/WEiAg5sjmBkmV/hfxv6HJH4NqPNrqjtSO5CwRmpsDfaf4begxW34KdJykH/l1yHtwBWQkCRdoXO8mPA==}
-    engines: {node: '>=20'}
-
   type-fest@5.9.0:
     resolution: {integrity: sha512-yANm3Jr3GiJ1qgJlxGAVxTOIcEOk1rhQHamlXtnrCK7EHP4HeM9OGxtMg/W7HFdrVzw/ZWJKGVIJusVH85sLtw==}
     engines: {node: '>=20'}
@@ -1871,11 +1871,16 @@ snapshots:
   '@esbuild/win32-x64@0.28.2':
     optional: true
 
-  '@express-zod/client@0.0.1-alpha.0': {}
-
-  '@express-zod/openapi@0.0.1-alpha.0(zod@4.6.5)':
+  '@express-zod/client@0.0.1-alpha.2(express-zod@0.0.2-alpha.4(express@5.2.1)(zod@4.6.5))':
     dependencies:
+      express-zod: 0.0.2-alpha.4(express@5.2.1)(zod@4.6.5)
+      type-fest: 5.9.0
+
+  '@express-zod/openapi@0.0.1-alpha.2(express-zod@0.0.2-alpha.4(express@5.2.1)(zod@4.6.5))(zod@4.6.5)':
+    dependencies:
+      express-zod: 0.0.2-alpha.4(express@5.2.1)(zod@4.6.5)
       lodash-es: 4.18.1
+      type-fest: 5.9.0
       zod-openapi: 6.0.2(zod@4.6.5)
     transitivePeerDependencies:
       - zod
@@ -2384,10 +2389,10 @@ snapshots:
 
   expect-type@1.4.0: {}
 
-  express-zod@0.0.2-alpha.2(express@5.2.1)(zod@4.6.5):
+  express-zod@0.0.2-alpha.4(express@5.2.1)(zod@4.6.5):
     dependencies:
       express: 5.2.1
-      type-fest: 5.10.0
+      type-fest: 5.9.0
       zod: 4.6.5
 
   express@5.2.1:
@@ -2934,10 +2939,6 @@ snapshots:
       esbuild: 0.28.2
     optionalDependencies:
       fsevents: 2.3.3
-
-  type-fest@5.10.0:
-    dependencies:
-      tagged-tag: 1.0.0
 
   type-fest@5.9.0:
     dependencies:

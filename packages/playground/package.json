@@ -9,8 +9,8 @@
         "preview": "vite preview"
     },
     "dependencies": {
-        "@express-zod/client": "0.0.1-alpha.0",
-        "@express-zod/openapi": "0.0.1-alpha.0",
+        "@express-zod/client": "0.0.1-alpha.2",
+        "@express-zod/openapi": "0.0.1-alpha.2",
         "@fontsource-variable/inter": "^5.3.0",
         "@webcontainer/api": "^1.6.4",
         "@xterm/addon-fit": "^0.11.0",
@@ -18,7 +18,7 @@
         "cors": "^2.8.6",
         "daisyui": "^5.7.38",
         "express": "^5.2.1",
-        "express-zod": "0.0.2-alpha.2",
+        "express-zod": "0.0.2-alpha.4",
         "monaco-editor": "^0.56.0",
         "type-fest": "catalog:",
         "zod": "^4.6.5",
