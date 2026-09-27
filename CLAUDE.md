@@ -2,6 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working in this repository.
 
+## Rules
+
+Standing rules. Each applies unless the current conversation says otherwise.
+
+1. **Don't write test code unless asked.** No new `*.test.ts` or `*.test-d.ts`, whether adding a feature or fixing a bug. Running the existing suites is always fine; they must stay green.
+2. **Stay inside the current package.** Don't search, read or modify anything outside the nearest `package.json` — from `packages/core`, that rules out sibling packages, root-level config and this file. Building, formatting or type-checking a sibling package counts as modifying it.
+3. **Prefer `interface` to `type`** for object and record shapes. Keep `type` for unions, conditional types, mapped types, template literals, and aliases of primitives or other named types — which is all every `type` in `src/router.ts` is, so don't go converting them.
+4. **Don't write comments unless asked.** No explanatory comments, no "why it has to be this way" notes, and no JSDoc beyond what the code around it already carries.
+
 ## Project Overview
 
 **express-zod** is a type-safe, schema-validated routing library for Express 5 and Zod v4. Zod schemas validate request inputs (params, query, body, headers, cookies) and drive the types a handler sees — including what it may hand back to be sent as the response.
@@ -24,7 +33,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working in this
 Everything below `packages/core/src` is the library. `index.ts` re-exports
 `./router` and the handler types.
 
-- **`router.ts`** — the whole public surface, types included. `Router<RouterOptions, Records>` exposes `.get .post .put .patch .delete .head .options .all .query`, `.use(...)` and `.listen`. Members prefixed `~` are internals: `~mount()` lazily builds the Express app, mounts the router under `~prefix` exactly once, and is what `listen` binds to; `~routes` returns the registered route metadata (`~path`, `~options`); `~register` and `~wrap` are the dispatch internals. `JoinPath` (type) and `joinPath` (runtime) sit together at the top — they have no shared implementation and can drift.
+- **`router.ts`** — the whole public surface, types included. `Router<RouterOptions, Records, Components>` exposes `.get .post .put .patch .delete .head .options .all .query`, `.use(...)` and `.listen`. Members prefixed `~` are internals: `~mount()` lazily builds the Express app, mounts the router under `~prefix` exactly once, and is what `listen` binds to; `~routes` returns the registered route metadata (`~path`, `~options`); `~register`, `~wrap` and `~components` are the dispatch internals. `JoinPath` (type) and `joinPath` (runtime) sit together at the top — they have no shared implementation and can drift.
+- **`components.ts`** — `resolveOptions(components, options, seen)` merges the components an options object enables into it. Type-level counterpart is `TInferWithComponents`; the two must agree (see *Components* below).
 - **`response.ts`** — `toResponse(handler, { autoNext })` adapts a handler whose **return value is the response** into an Express handler. Objects, arrays, strings, numbers and booleans all go through `res.json()` — never `res.send()`, so a number is never read as a status code. Special cases: Fetch `Response` (status, headers and each `set-cookie` are copied; encoding headers are dropped because `fetch` already decoded the body), Node streams and async iterables, `Buffer`, `null` (204, keeping a status the handler set itself) and `undefined`. It never rethrows, and calls `next()` from outside its `try` — Express 5's `router@2` both try/catches and attaches `.then(null, next)` to a returned thenable, so rethrowing forwards the same error twice.
 - **`schema-validator.ts`** — `schemaValidator(options)` returns an Express middleware that `safeParse`s `params`, `query`, `body`, `headers` and `cookies` in that fixed order, writes each parsed value back onto `req`, and forwards the `ZodError` on the first failure. Returns `null` when there is nothing to validate, and ignores any schema whose `.meta().skip` is set.
 - **`types/handler.ts`** — `IRequest`, `IResponse`, `RequestHandler`, `ErrorRequestHandler`. `ResponseBody` picks `responses[201]`, else `responses[200]`, else `unknown`.
@@ -34,11 +44,43 @@ Everything below `packages/core/src` is the library. `index.ts` re-exports
 
 `ISchema` names the schema keys a route may declare. `InferRouteOptions` maps each to its `z.output`, and `IRouteRegistrar` turns one call into an updated `Records`. Records are keyed by the **full path from the root**: `AddRoute` folds this router's own prefix into the key, so `use` only ever adds the *parent's* prefix — which is what lets prefixes compose recursively through any nesting depth.
 
+### Components
+
+A **component** is a named bundle of route schemas that later options can enable by name.
+
+```ts
+const app = new Router().use({
+    asComponent: {
+        name: 'User',
+        headers: z.object({ authorization: z.string() }),
+    },
+})
+
+// `User: true` at the top level of the options enables it
+app.get('/me', { User: true, query: z.object({ page: z.coerce.number() }) }, (req) => {
+    req.headers.authorization // string, from the component
+})
+```
+
+Enabling merges the component's schemas *underneath* the call site's, so the call site wins a conflict. Object keys (`params`, `query`, `headers`, `cookies`, `locals`) merge field by field, `responses` merges per status code, `body` is replaced wholesale. Enables nest — a declaration may enable other components — and a cycle is cut on both sides (the type's `Seen` parameter, the runtime's `seen` set).
+
+Two things have to agree, and are the usual place a change goes wrong:
+
+- `TInferWithComponents` (types) and `resolveOptions` (runtime) implement the same merge independently. A change to either needs the other. `TInferUseOptions` is the `use`-only variant: a declaration that also passes middleware doubles as one, so its schemas have to be merged into the handler's types too, under `TInferWithComponents`.
+- The *registrar overloads* constrain `Options` to `TOptions` (`object`), **never** to `IRouteOptions`. That interface is a weak type, and `{ User: true }` shares no property with it, so a weak-type constraint rejects the inferred literal — TypeScript then substitutes the constraint and the handler's `req`/`res` silently degrade to `InferRouteOptions<IRouteOptions>`. `NoExtraKeys` is what validates the options; routes give it `IRouteOptions & TComponentEnables<Components>`, while `use` gives it `TComponentOptions<Components>` (which also admits `asComponent`) **intersected with `Options`** — that intersection is a plain inference site, needed because `NoExtraKeys` alone fails to infer an options object whose only key is `asComponent`.
+- `asComponent` lives on the ordinary `use` options overload, not on an overload of its own; the overload's *return* type switches on it (`Options extends { asComponent: infer Component }`) to hand back a router with the component registered.
+
+`~register` resolves once and hands the **same merged object** to both `schemaValidator` and `~updateRoute` — that is what makes the merged schemas show up in `~options`, which is all the OpenAPI plugin reads.
+
 ### Known rough edges
 
-- `use({ ... }, handler)` with an **inline** options literal does not infer `Options`, so `req.params` and friends degrade to `unknown`. Lift the schemas into a variable first. (The JSDoc on `use` shows the inline form, which does not work.)
+- `use({ ... }, handler)` with an **inline** options literal does not infer `Options`, so `req.params` and friends degrade to `unknown`. Lift the schemas into a variable first. (The JSDoc on `use` shows the inline form, which does not work.) Route verbs (`get`, `post`, …) do not have this problem.
 - Two annotated Express `ErrorRequestHandler`s cannot be passed to one `use` call — `IRequest<{}>['params']` is `unknown`, which is not assignable to Express's `ParamsDictionary`. Chain `.use(a).use(b)` instead.
 - Middleware registered through `use` never auto-calls `next()` (that is the `autoNext: false` above). Returning a value still short-circuits; returning `undefined` means the middleware owns the chain, exactly as in plain Express.
+- Components must be **chained**: `Components` lives on the type `use` returns, not on the instance, so `const r = new Router(); r.use({ asComponent: … }); r.get('/', { User: true }, h)` is a type error even though the runtime would accept it.
+- Two components enabled together that declare the *same* field are ambiguous — the runtime folds them in options-key order while the type level peels the names in union order, which is not the same order. A field only one component declares is never ambiguous.
+- `use(childRouter)` propagates neither the child's `Records` components nor its `~components` registry, so a parent route cannot enable a component the child declared.
+- `safeExtend` carries the **base** schema's config and meta to the merged result, so a component's `strict`/`loose` mode and its `.meta({ skip: true })` beat the call site's.
 
 ## Development Commands
 
