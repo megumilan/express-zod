@@ -82,7 +82,11 @@ type _InferResponsesSchema<Options extends IRouteOptions> = Options extends {
 
 export interface IRouteOptions extends ISchema, ExpressZod.RouteOptions {}
 
-type AnyHandler = ErrorRequestHandler | RequestHandler
+type AnyHandler =
+    | ErrorRequestHandler
+    | RequestHandler
+    | e.RequestHandler
+    | e.ErrorRequestHandler
 
 type RouteMethods = {
     [Method in HttpMethod]?: object | undefined
@@ -333,6 +337,17 @@ export class Router<
             | [IRouteOptions, RequestHandler<Simplify<InferRouteOptions<{}>>>]
             | RequestHandler<Simplify<InferRouteOptions<{}>>>[]
     ): this
+    /**
+     * Registers middleware, same as {@link e.IRouter.use the original use}
+     *
+     * @param handlers Middleware handlers.
+     *
+     * @example
+     * ```ts
+     * new Router().use(express.json())
+     * ```
+     */
+    use(...handlers: e.RequestHandler[]): this
     /**
      * Registers error-handling middleware without options.
      *
