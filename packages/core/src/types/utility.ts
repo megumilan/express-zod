@@ -1,17 +1,32 @@
-import type { If, IsAny, IsNever, Simplify } from 'type-fest'
+import type { IsAny, IsNever, Primitive, UnknownArray } from 'type-fest'
 
-export type MarkOptionalIfUndefined<T> = T extends unknown
-    ? Simplify<
-          {
-              [K in keyof T as undefined extends T[K] ? K : never]?: Exclude<
-                  T[K],
-                  undefined
-              >
-          } & {
-              [K in keyof T as undefined extends T[K] ? never : K]: T[K]
-          }
-      >
-    : never
+// export type IntelliSense<T, S> = T | (S & {})
+export type IntelliSense<T, S> = { [K in keyof T & keyof S]?: T[K] }
 
-/** Fallback when T is any or never */
-export type IsUnexpected<T, Fallback> = If<IsAny<T> | IsNever<T>, Fallback, T>
+export type NoExtraKeys<T, S> = ({ [K in keyof T & keyof S]?: T[K] } & {
+    [K in Exclude<keyof T, keyof S>]?: never
+}) &
+    (S & {
+        [K in Exclude<keyof T, keyof S>]?: never
+    })
+
+type NotAnObject =
+    | Primitive
+    | UnknownArray
+    | ((...args: never[]) => unknown)
+    | (new (
+          ...args: never[]
+      ) => unknown)
+
+export type IsObject<T> =
+    IsAny<T> extends true
+        ? false
+        : IsNever<T> extends true
+          ? false
+          : T extends NotAnObject
+            ? false
+            : T extends object
+              ? true
+              : false
+
+export type IsFunction<T> = T extends (...args: any[]) => any ? true : false

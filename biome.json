@@ -18,6 +18,10 @@
             "preset": "recommended",
             "complexity": {
                 "noBannedTypes": "off"
+            },
+            "suspicious": {
+                "noExplicitAny": "off",
+                "noConfusingVoidType": "off"
             }
         }
     },

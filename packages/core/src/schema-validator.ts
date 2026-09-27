@@ -1,32 +1,44 @@
-import type { RequestHandler } from 'express'
-import type { TRouteSchema } from './router'
+import type e from 'express'
+import type { ZodType } from 'zod'
 
-// export type IsMatchPathParams<S extends string> =
-//     S extends `${string}:${string}` ? true : false
+export const REQUEST_KEYS = [
+    'params',
+    'query',
+    'body',
+    'headers',
+    'cookies',
+] as const
 
-// export function isMatchPathParams(path: string) {
-//     return path.includes(':')
-// }
+export type RequestKey = (typeof REQUEST_KEYS)[number]
 
-// export function inferPathParamsSchema(path: string) {
-//     const shape: Record<string, ZodType> = {}
-//     for (const match of path.matchAll(/:([a-zA-Z0-9_-]+)(})?/g)) {
-//         const [, slug, optional] = match
-//         shape[slug] = optional ? z.string().optional() : z.string()
-//     }
-//     return z.object(shape)
-// }
+export function schemaValidator(
+    options: Partial<Record<RequestKey, ZodType>>,
+): e.RequestHandler | null {
+    const schemas = REQUEST_KEYS.map((key) => [key, options?.[key]] as const)
+        .filter(
+            (entry): entry is [RequestKey, ZodType] => entry[1] !== undefined,
+        )
+        .filter(([, schema]) => !schema.meta()?.skip)
 
-export function schemaValidator(schema: Partial<TRouteSchema>): RequestHandler {
-    const { responses, ...schemas } = schema
+    if (schemas.length === 0) {
+        return null
+    }
+
     return (req, _res, next) => {
-        try {
-            for (const [key, schema] of Object.entries(schemas)) {
-                schema.parse(req[key as keyof typeof req])
+        for (const [key, schema] of schemas) {
+            const parsed = schema.safeParse(req[key])
+            if (!parsed.success) {
+                next(parsed.error)
+                return
             }
-            next()
-        } catch (err) {
-            next(err)
+
+            Object.defineProperty(req, key, {
+                value: parsed.data,
+                writable: true,
+                configurable: true,
+                enumerable: true,
+            })
         }
+        next()
     }
 }

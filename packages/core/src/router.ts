@@ -1,118 +1,88 @@
-import type { IncomingHttpHeaders } from 'node:http'
-import {
-    type ErrorRequestHandler,
-    type Express,
-    Router as ExpressRouter,
-    type IRoute,
-    type IRouter,
-    type NextFunction,
-    type Request,
-    type RequestHandler,
-    type Response,
-    type RouterOptions,
-} from 'express'
-import type {
-    If,
-    IsEmptyObject,
-    IsNever,
-    IsUnknown,
-    OmitIndexSignature,
-    Simplify,
-    Writable,
-} from 'type-fest'
+import type e from 'express'
+import express, { Router as ExpressRouter } from 'express'
+import type { IsAny, IsNever, Or, Simplify, Writable } from 'type-fest'
 import type { output, ZodObject, ZodType } from 'zod'
-import type { Application } from './application'
+import { toResponse } from './response'
 import { schemaValidator } from './schema-validator'
-import { createSSEMiddleware } from './sse'
-import type { IsUnexpected, MarkOptionalIfUndefined } from './types/utility'
+import type { ErrorRequestHandler, RequestHandler } from './types/handler'
+import type { IntelliSense, NoExtraKeys } from './types/utility'
 
 declare global {
     namespace ExpressZod {
         interface RouteOptions {}
-        interface RouteResponse<
+        interface Request<Schema extends Record<string, any>> {}
+        interface Response<
             Responses extends Record<number, unknown>,
-            Locals extends Record<string, unknown> = Record<string, unknown>,
-            StatusCode extends keyof Responses = 200,
-        > extends Omit<
-                Response<Responses[StatusCode], Locals>,
-                'status' | 'json' | 'write'
-            > {
-            status<const Code extends keyof Responses>(
-                statusCode: Code,
-            ): RouteResponse<Responses, Locals, Code>
-            json(
-                ...args: If<
-                    IsNever<Responses[StatusCode]>,
-                    [],
-                    [body: Responses[StatusCode]]
-                >
-            ): this
-            write(
-                chunk: Responses[StatusCode],
-                callback?: (error: Error | null | undefined) => void,
-            ): boolean
-            write(
-                chunk: Responses[StatusCode],
-                encoding: BufferEncoding,
-                callback?: (error: Error | null | undefined) => void,
-            ): boolean
-        }
+            Locals extends Record<string, any> = Record<string, any>,
+            StatusCode extends keyof Responses = 201 extends keyof Responses
+                ? 201
+                : 200,
+        > {}
     }
 }
 
-export type NoExtraKeys<T, S> = { [K in keyof T & keyof S]: T[K] } | (S & {})
+declare module 'zod' {
+    interface GlobalMeta {
+        /** Skip validation */
+        skip?: boolean
+    }
+}
 
-export interface TRouterOptions extends RouterOptions {
+export type HttpMethod =
+    | 'get'
+    | 'post'
+    | 'put'
+    | 'patch'
+    | 'delete'
+    | 'head'
+    | 'options'
+    | 'all'
+    | 'query'
+
+export interface IRouterOptions extends e.RouterOptions {
     prefix?: string
+    name?: string
 }
 
-export const HTTP_METHODS = [
-    'get',
-    'post',
-    'put',
-    'patch',
-    'delete',
-    'head',
-    'options',
-] as const
-
-export type TRoueMethod = (typeof HTTP_METHODS)[number]
-
-export const ROUTE_SCHEMAS = [
-    'params',
-    'query',
-    'body',
-    'responses',
-    'headers',
-    'cookies',
-] as const
-
-export type TRouteSchemaKey = (typeof ROUTE_SCHEMAS)[number]
-
-export interface TRouteResponseSchema {
-    [K: number]: ZodType
+export interface ISchema {
+    params?: ZodObject
+    query?: ZodObject
+    body?: ZodType
+    headers?: ZodObject
+    cookies?: ZodObject
+    responses?: Record<number, ZodType>
+    locals?: ZodObject
 }
 
-export interface TRouteSchema {
-    params: ZodObject
-    query: ZodObject
-    body: ZodType
-    responses: TRouteResponseSchema
-    headers: ZodObject
-    cookies: ZodObject
+export type InferRouteOptions<Options extends object> = {
+    -readonly [K in keyof Options]: K extends keyof ISchema
+        ? _InferSchema<Extract<Options, ISchema>, K>
+        : Options[K]
 }
 
-export interface TRouteRecord {
-    method: TRoueMethod
-    path: string
-    fullPath: string
-    options?: TRouteOptions
+type _InferSchema<
+    S extends ISchema,
+    K extends keyof ISchema,
+> = K extends 'responses' ? _InferResponsesSchema<S> : Writable<output<S[K]>>
+
+type _InferResponsesSchema<Options extends IRouteOptions> = Options extends {
+    responses: infer Responses
+}
+    ? {
+          -readonly [Status in keyof Responses]: output<Responses[Status]>
+      }
+    : unknown
+
+export interface IRouteOptions extends ISchema, ExpressZod.RouteOptions {}
+
+type AnyHandler = ErrorRequestHandler | RequestHandler
+
+type RouteMethods = {
+    [Method in HttpMethod]?: object | undefined
 }
 
-export interface TRouteOptions
-    extends Partial<TRouteSchema>,
-        ExpressZod.RouteOptions {
-    sse?: boolean
+export interface IRouteRecords {
+    [Path: string]: RouteMethods
 }
 
 type JoinPath<Prefix, Path extends string> = Prefix extends string
@@ -123,353 +93,441 @@ type JoinPath<Prefix, Path extends string> = Prefix extends string
           : `${Prefix extends `${infer P}/` ? P : Prefix}/${Path extends `/${infer P}` ? P : Path}`
     : Path
 
-type GenerateRoute<
-    Method extends TRoueMethod,
-    Path extends string,
-    RouteOptions extends TRouteOptions,
-    RouterOptions extends TRouterOptions,
-> = Simplify<{
-    method: Method
-    path: Path
-    fullPath: RouterOptions extends { prefix: infer P }
-        ? JoinPath<P, Path>
-        : Path
-    options: Writable<RouteOptions>
-}>
-
-type RedefinedThis<
-    This,
-    Options extends TRouterOptions,
-    Routes extends TRouteRecord[],
-    Routers extends Router[],
-    Method extends TRoueMethod,
-    Path extends string,
-    RouteOptions extends TRouteOptions,
-> = This extends Application
-    ? Application<
-          Options,
-          [...Routes, GenerateRoute<Method, Path, RouteOptions, Options>],
-          Routers
-      >
-    : Router<
-          Options,
-          [...Routes, GenerateRoute<Method, Path, RouteOptions, Options>],
-          Routers
-      >
-
-type InferRouteSchema<Options extends TRouteOptions> = {
-    [K in keyof Options]: K extends 'responses'
-        ? {
-              [Status in keyof Options[K]]: output<Options[K][Status]>
-          }
-        : K extends 'headers'
-          ? If<
-                IsUnknown<output<Options[K]>>,
-                OmitIndexSignature<IncomingHttpHeaders>,
-                OmitIndexSignature<IncomingHttpHeaders> & output<Options[K]>
-            >
-          : output<Options[K]>
+/** Runtime counterpart of {@link JoinPath}. */
+function joinPath(prefix: string, path: string) {
+    if (!prefix) {
+        return path
+    }
+    if (!path || path === '/') {
+        return prefix
+    }
+    return `${prefix.replace(/\/$/, '')}/${path.replace(/^\//, '')}`
 }
 
-interface TRouteResponse<
-    Responses extends Record<number, unknown>,
-    Locals extends Record<string, unknown> = Record<string, unknown>,
-    StatusCode extends keyof Responses = 200,
-> extends ExpressZod.RouteResponse<Responses, Locals, StatusCode> {}
+type PrefixOf<Options> = Options extends { prefix: infer Prefix extends string }
+    ? Prefix
+    : ''
 
-export type TRouteHandler<
-    Options extends TRouteOptions,
-    Inferred = InferRouteSchema<Options>,
-    Params = Inferred extends { params: infer P }
-        ? MarkOptionalIfUndefined<P>
-        : unknown,
-    Responses = Inferred extends { responses: infer R } ? R : unknown,
-    Resp = Responses extends { 200: infer S } ? S : unknown,
-    Body = Inferred extends { body: infer B } ? B : unknown,
-    Query = Inferred extends { query: infer Q } ? Q : unknown,
-    Headers = Inferred extends { headers: infer H }
-        ? H
-        : OmitIndexSignature<IncomingHttpHeaders>,
-    Cookies = Inferred extends { cookies: infer C } ? C : unknown,
-> = (
-    req: Omit<Request<Params, Resp, Body, Query>, 'headers' | 'cookies'> & {
-        headers: Headers
-        cookies: Cookies
-    },
-    res: TRouteResponse<Responses & {}>,
-    next: NextFunction,
-) => unknown
+type PrefixRecords<Records extends IRouteRecords, Prefix extends string> = {
+    [Path in keyof Records as JoinPath<Prefix, Path & string>]: Records[Path]
+} extends infer Reb extends IRouteRecords
+    ? Reb
+    : never
 
-export interface TRouteRegistrar<
-    This,
-    Options extends TRouterOptions,
-    Method extends TRoueMethod,
-    Routes extends TRouteRecord[],
-    Routers extends Router[],
+type AddMethod<Existing, Method extends HttpMethod, Options extends object> = {
+    [M in Method | keyof Existing]: M extends Method
+        ? Simplify<InferRouteOptions<Options>>
+        : M extends keyof Existing
+          ? Existing[M]
+          : never
+}
+
+type AddRoute<
+    Records extends IRouteRecords,
+    Path extends string,
+    Method extends HttpMethod,
+    Options extends object,
+> = Simplify<{
+    [Key in keyof Records | Path]: Key extends Path
+        ? Simplify<
+              AddMethod<
+                  Key extends keyof Records ? Records[Key] : {},
+                  Method,
+                  Options
+              >
+          >
+        : Key extends keyof Records
+          ? Records[Key]
+          : never
+}>
+
+type AddMethods<
+    Existing extends RouteMethods,
+    NewMethods extends RouteMethods,
+> = Simplify<{
+    [Method in
+        | keyof Existing
+        | keyof NewMethods]: Method extends keyof NewMethods
+        ? NewMethods[Method]
+        : Method extends keyof Existing
+          ? Existing[Method]
+          : never
+}>
+
+/** Merges `NewRecords` into `Records`; a later method on the same path wins. */
+type AddRoutes<
+    Records extends IRouteRecords,
+    NewRecords extends IRouteRecords,
+> = Simplify<{
+    [Path in keyof Records | keyof NewRecords]: Path extends keyof NewRecords
+        ? Path extends keyof Records
+            ? AddMethods<Records[Path], NewRecords[Path]>
+            : NewRecords[Path]
+        : Path extends keyof Records
+          ? Records[Path]
+          : never
+}>
+
+export interface IRouteRegistrar<
+    RouterOptions extends IRouterOptions,
+    Records extends IRouteRecords,
+    Method extends HttpMethod,
 > {
-    <const Path extends string, const RouteOptions extends TRouteOptions>(
+    /**
+     * Registers a route with options.
+     *
+     * @param path The route path.
+     * @param options The route options.
+     * @param handlers The route handlers.
+     *
+     * @example
+     * ```ts
+     * new Router().get('/', { query: z.object({ name: z.string() }) }, (req) => `Hello ${req.query.name}`)
+     * ```
+     */
+    <const Path extends string, const Options extends IRouteOptions = {}>(
         path: Path,
-        options: IsEmptyObject<RouteOptions> extends true
-            ? RouteOptions
-            : NoExtraKeys<RouteOptions, TRouteOptions>,
-        ...handlers: TRouteHandler<RouteOptions>[]
-    ): RedefinedThis<This, Options, Routes, Routers, Method, Path, RouteOptions>
-    <const Path extends string, const RouteOptions extends TRouteOptions = {}>(
+        options: NoExtraKeys<Options, IRouteOptions>,
+        ...handlers: RequestHandler<Simplify<InferRouteOptions<Options>>>[]
+    ): Router<
+        RouterOptions,
+        AddRoute<
+            Records,
+            JoinPath<PrefixOf<RouterOptions>, Path>,
+            Method,
+            Options
+        >
+    >
+    /**
+     * Registers a route without options.
+     *
+     * @param path The route path.
+     * @param handler The route handler.
+     *
+     * @example
+     * ```ts
+     * new Router().get('/', (req) => 'Hello World')
+     * ```
+     */
+    <const Path extends string, const Options extends IRouteOptions = {}>(
         path: Path,
         ...handlers:
             | [
-                  IsEmptyObject<RouteOptions> extends true
-                      ? RouteOptions
-                      : NoExtraKeys<RouteOptions, TRouteOptions>,
-                  ...TRouteHandler<RouteOptions>[],
+                  NoExtraKeys<Options, IRouteOptions>,
+                  ...RequestHandler<Simplify<InferRouteOptions<Options>>>[],
               ]
-            | TRouteHandler<RouteOptions>[]
-    ): RedefinedThis<This, Options, Routes, Routers, Method, Path, RouteOptions>
+            | RequestHandler<Simplify<InferRouteOptions<Options>>>[]
+    ): Router<
+        RouterOptions,
+        AddRoute<Records, JoinPath<PrefixOf<RouterOptions>, Path>, Method, {}>
+    >
 }
 
-export type TPluginContext = {
-    readonly raw: ExpressRouter | Express
-    readonly instance: Router | Application
+export interface IRoute extends e.IRoute {
+    /** Full path */
+    '~path': string
+    /** Route options */
+    '~options': IRouteOptions
 }
 
-export interface TPlugin<_Routes extends TRouteRecord[] = []> {
-    readonly name: string
-    readonly install: (ctx: TPluginContext) => void
-}
-
-export interface TRoute extends IRoute {
-    method: TRoueMethod
-    fullPath: string
-    routeOptions: TRouteOptions
-}
-
-export type PrefixOf<O extends TRouterOptions> = O extends {
-    prefix: infer P extends string
-}
-    ? P
-    : ''
-
-export type UpdateRoutesFullPath<
-    Routes extends TRouteRecord[],
-    Prefix extends string,
-> = {
-    [K in keyof Routes]: Routes[K] extends {
-        fullPath: infer FullPath extends string
-    }
-        ? Simplify<
-              Omit<Routes[K], 'fullPath'> & {
-                  fullPath: JoinPath<Prefix, FullPath>
-              }
-          >
-        : Routes[K]
-} extends infer Routes
-    ? Routes extends readonly TRouteRecord[]
-        ? Routes
-        : never
-    : never
-
-export type UpdateFullPath<R extends Router, Prefix extends string> =
-    R extends Router<infer Options, infer Routes, infer Routers>
-        ? Router<Options, UpdateRoutesFullPath<Routes, Prefix>, Routers>
-        : never
-
-function joinPath<const Prefix extends string, const Path extends string>(
-    prefix: Prefix,
-    path: Path,
-): JoinPath<Prefix, Path> {
-    if (path === '' || path === '/') {
-        return prefix as JoinPath<Prefix, Path>
-    }
-    const normalizedPrefix = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix
-    const normalizedPath = path.startsWith('/') ? path.slice(1) : path
-    return `${normalizedPrefix}/${normalizedPath}` as JoinPath<Prefix, Path>
-}
-
-class Router<
-    const Options extends TRouterOptions = {},
-    const Routes extends TRouteRecord[] = [],
-    const Routers extends Router[] = [],
+export class Router<
+    const RouterOptions extends IRouterOptions = {},
+    const Records extends IRouteRecords = {},
 > {
-    protected readonly _options?: TRouterOptions
-    protected readonly host: IRouter = ExpressRouter()
+    '~name': string | undefined
+    '~prefix': string
+    /** {@link e.Express Express} */
+    '~express': e.Express | undefined
+    /** {@link e.Router Express Router} */
+    '~router': e.Router
+    '~mounted' = false
 
-    constructor(options?: NoExtraKeys<Options, TRouterOptions>) {
-        this._options = (options || {}) as Options
-    }
-
-    protected registerRoute<Method extends TRoueMethod>(
-        method: Method,
-    ): TRouteRegistrar<this, Options, Method, Routes, Routers> {
-        return <
-            const Path extends string,
-            const RouteOptions extends TRouteOptions,
-        >(
-            path: Path,
-            ..._handlers:
-                | TRouteHandler<RouteOptions>[]
-                | [RouteOptions, ...TRouteHandler<RouteOptions>[]]
-        ) => {
-            const [options, handlers] = (typeof _handlers[0] === 'function'
-                ? [{}, _handlers]
-                : [_handlers[0] || {}, _handlers.slice(1)]) as unknown as [
-                RouteOptions,
-                RequestHandler[],
-            ]
-
-            const staticSchema = {} as Partial<TRouteSchema>
-            for (const key of ROUTE_SCHEMAS) {
-                if (options[key]) {
-                    staticSchema[key] = options[key] as never
-                }
-            }
-            const { responses: _, ...runtimeSchema } = staticSchema
-            if (options.sse) {
-                handlers.unshift(createSSEMiddleware())
-            }
-            if (Object.keys(runtimeSchema).length) {
-                handlers.unshift(schemaValidator(runtimeSchema))
-            }
-
-            let fullPath: string = path
-            const prefix = this._options?.prefix?.trim() || ''
-            if (prefix) {
-                fullPath = joinPath(prefix, path)
-            }
-            this.host[method](fullPath, ...handlers)
-            this.updateLastRoute({
-                method,
-                fullPath,
-                routeOptions: { ...options, ...staticSchema },
-            })
-            return this as unknown as RedefinedThis<
-                this,
-                Options,
-                Routes,
-                Routers,
-                Method,
-                Path,
-                RouteOptions
-            >
-        }
-    }
-
-    /** The registered routes */
-    get routes() {
-        return this.getRoutes(this.host)
+    constructor(
+        options: Writable<IntelliSense<RouterOptions, IRouterOptions>> &
+            IRouterOptions = {} as any,
+    ) {
+        this['~name'] = options.name
+        this['~prefix'] = options.prefix || ''
+        this['~router'] = ExpressRouter(options)
     }
 
     get get() {
-        return this.registerRoute('get')
+        return this['~register']('get')
     }
     get post() {
-        return this.registerRoute('post')
+        return this['~register']('post')
     }
     get put() {
-        return this.registerRoute('put')
-    }
-    get delete() {
-        return this.registerRoute('delete')
+        return this['~register']('put')
     }
     get patch() {
-        return this.registerRoute('patch')
+        return this['~register']('patch')
+    }
+    get delete() {
+        return this['~register']('delete')
     }
     get head() {
-        return this.registerRoute('head')
+        return this['~register']('head')
     }
     get options() {
-        return this.registerRoute('options')
+        return this['~register']('options')
+    }
+    get all() {
+        return this['~register']('all')
+    }
+    get query() {
+        return this['~register']('query')
     }
 
-    use<const M extends RequestHandler | ErrorRequestHandler>(
-        middleware: M,
+    /**
+     * Registers middleware or error-handling middleware with options.
+     *
+     * Pass options as the first argument, followed by one or more handlers.
+     * Use `'error'` as the first generic argument to register error handlers.
+     *
+     * @param options Middleware options.
+     * @param handlers Middleware handlers or error handlers.
+     *
+     * @example
+     * ```ts
+     * router.use({ params: z.object({ id: z.string() }) }, (req, res, next) => {
+     *     req.params.id // string
+     * })
+     *
+     * router.use<'error'>({  }, (err, req, res, next) => {})
+     * ```
+     */
+    use<
+        const _Type extends 'error' | undefined = undefined,
+        const Options extends IRouteOptions = {},
+    >(
+        options: NoExtraKeys<Options, IRouteOptions>,
+        ...handlers: _Type extends 'error'
+            ? ErrorRequestHandler[]
+            : RequestHandler<Simplify<InferRouteOptions<Options>>>[]
     ): this
-    use<const P extends TPlugin>(
-        plugin: P,
-    ): P extends TPlugin<infer _Routes>
-        ? IsUnexpected<
-              Router<
-                  Options,
-                  [
-                      ...Routes,
-                      ...UpdateRoutesFullPath<_Routes, PrefixOf<Options>>,
-                  ],
-                  Routers
-              >,
-              this
-          >
-        : this
-    use<const R extends Router>(
+    /**
+     * Registers middleware without options.
+     *
+     * @param handlers Middleware handlers.
+     *
+     * @example
+     * ```ts
+     * router.use((req, res, next) => {})
+     * ```
+     */
+    use(
+        ...handlers:
+            | [IRouteOptions, RequestHandler<Simplify<InferRouteOptions<{}>>>]
+            | RequestHandler<Simplify<InferRouteOptions<{}>>>[]
+    ): this
+    /**
+     * Registers error-handling middleware without options.
+     *
+     * Pass `'error'` as the generic argument to enable type-safe
+     * parameter inference for error handlers. Without it, the handler
+     * parameters may be inferred as `any`.
+     *
+     * @param handlers Error handlers.
+     *
+     * @example
+     * ```ts
+     * new Router().use<'error'>((_err, _req, _res, _next) => {})
+     * ```
+     */
+    use<const _Type extends 'error', const Options extends IRouteOptions = {}>(
+        ...handlers:
+            | [
+                  options: NoExtraKeys<Options, IRouteOptions>,
+                  ...handlers: ErrorRequestHandler[],
+              ]
+            | [...handlers: ErrorRequestHandler[]]
+    ): this
+    /**
+     * Registers a router.
+     *
+     * Mounts the router and incorporates its route records into the current
+     * router's type, including the current router's prefix.
+     *
+     * @param router Router to mount.
+     *
+     * @example
+     * ```ts
+     * const users = new Router({ prefix: '/users' }).get('/', handler)
+     *
+     * const app = new Router({ prefix: '/api' }).use(users)
+     * // Routes include /api/users
+     * ```
+     */
+    use<R extends Router>(
         router: R,
-    ): Router<
-        Options,
-        Routes,
-        [...Routers, UpdateFullPath<R, PrefixOf<Options>>]
-    >
-    use<const T extends Router>(
-        target: RequestHandler | ErrorRequestHandler | T | TPlugin,
-    ) {
-        return this.handleUse(target)
+    ): R extends Router<infer _, infer Routes extends IRouteRecords>
+        ? Or<IsAny<Routes>, IsNever<Routes>> extends true
+            ? this
+            : Router<
+                  RouterOptions,
+                  AddRoutes<
+                      Records,
+                      PrefixRecords<Routes, PrefixOf<RouterOptions>>
+                  >
+              >
+        : this
+    use<const P extends string, R extends Router>(
+        prefix: P,
+        router: R,
+    ): R extends Router<infer _, infer Routes extends IRouteRecords>
+        ? Or<IsAny<Routes>, IsNever<Routes>> extends true
+            ? this
+            : Router<
+                  RouterOptions,
+                  AddRoutes<
+                      Records,
+                      PrefixRecords<
+                          Routes,
+                          JoinPath<PrefixOf<RouterOptions>, P>
+                      >
+                  >
+              >
+        : this
+    use(
+        first?: IRouteOptions | AnyHandler | Router | string,
+        ...rest: AnyHandler[]
+    ): this {
+        if (first instanceof Router) {
+            this['~router'].use(first['~prefix'], first['~router'])
+            this['~updateRoutes'](first['~router'])
+            return this
+        }
+
+        if (typeof first === 'string' && rest[0] instanceof Router) {
+            const router = rest[0]
+            this['~router'].use(
+                joinPath(first, router['~prefix']),
+                router['~router'],
+            )
+            this['~updateRoutes'](router['~router'], first)
+            return this
+        }
+
+        const leading = first as IRouteOptions | AnyHandler | undefined
+        const handlers =
+            typeof leading === 'function' ? [leading, ...rest] : rest
+        const validation =
+            typeof leading === 'function'
+                ? null
+                : schemaValidator(leading ?? {})
+
+        this['~router'].use(
+            ...(validation ? [validation] : []),
+            ...handlers.map((handler) => this['~wrap'](handler)),
+        )
+        return this
     }
 
-    protected handleUse<const T extends Router>(
-        target: RequestHandler | ErrorRequestHandler | T | TPlugin,
-    ) {
-        if (typeof target === 'function') {
-            this.host.use(target)
-        }
-        if (target instanceof Router) {
-            this.host.use(this._options?.prefix || '', target.host)
-            this.splicePrefix(this._options?.prefix || '', target.host)
-        }
-        if (typeof target === 'object' && 'install' in target) {
-            target.install({
-                raw: this.host,
-                instance: this,
-            })
-        }
-        return this as
-            | Application<Options, Routes, [...Routers, T]>
-            | Router<Options, Routes, [...Routers, T]>
+    get listen() {
+        const app = this['~mount']()
+        return app.listen.bind(app)
     }
 
-    protected getRoutes(router: IRouter) {
-        const routes: TRoute[] = []
+    '~register'<const Method extends HttpMethod>(method: Method) {
+        const register = (
+            path: string,
+            ...args: [IRouteOptions, RequestHandler[]] | RequestHandler[]
+        ) => {
+            let options: IRouteOptions
+            let handlers: RequestHandler[]
+
+            if (typeof args[0] === 'function') {
+                options = {} as IRouteOptions
+                handlers = args as RequestHandler[]
+            } else {
+                options = args[0]
+                handlers = args.slice(1) as RequestHandler[]
+            }
+
+            const validation = schemaValidator(options)
+
+            const dispatch = this['~router'][method] as (
+                path: string,
+                ...handlers: e.RequestHandler[]
+            ) => unknown
+
+            dispatch.call(
+                this['~router'],
+                path,
+                ...(validation ? [validation] : []),
+                ...handlers.map((handler) => toResponse(handler)),
+            )
+            this['~updateRoute'](joinPath(this['~prefix'], path), options)
+            return this
+        }
+        return register as unknown as IRouteRegistrar<
+            RouterOptions,
+            Records,
+            Method
+        >
+    }
+
+    '~wrap'(handler: AnyHandler) {
+        return (
+            handler.length === 4
+                ? handler
+                : toResponse(handler as RequestHandler, { autoNext: false })
+        ) as e.RequestHandler | e.ErrorRequestHandler
+    }
+
+    '~mount'() {
+        if (!this['~express']) {
+            this['~express'] = express()
+        }
+        if (!this['~mounted']) {
+            this['~express'].use(this['~prefix'], this['~router'])
+            this['~mounted'] = true
+        }
+        return this['~express']
+    }
+
+    /** The registered routes */
+    get '~routes'() {
+        return this['~getRoues'](this['~router'])
+    }
+
+    '~getRoues'(router: e.Router) {
+        const routes: IRoute[] = []
+
         for (const layer of router.stack) {
             if (layer.route) {
-                routes.push(layer.route as TRoute)
+                routes.push(layer.route as IRoute)
                 continue
             }
-            const childRouter = layer.handle as unknown as IRouter
-            if (Array.isArray(childRouter?.stack)) {
-                routes.push(...this.getRoutes(childRouter))
+
+            const childRouter = layer.handle as unknown as e.IRouter
+
+            if (Array.isArray(childRouter.stack)) {
+                routes.push(...this['~getRoues'](childRouter))
             }
         }
+
         return routes
     }
 
-    protected updateLastRoute(
-        data: Pick<TRoute, 'method' | 'fullPath' | 'routeOptions'>,
-    ) {
-        const target = this.routes.at(-1)
+    '~updateRoute'(path: string, options: IRouteOptions) {
+        const target = this['~routes'].at(-1)
         if (target) {
-            target.method = data.method
-            target.fullPath = data.fullPath
-            target.routeOptions = data.routeOptions
+            target['~path'] = path
+            target['~options'] = options
         }
     }
 
-    protected splicePrefix(prefix: string, router?: IRouter) {
-        if (router) {
-            const routes = this.getRoutes(router)
-            return routes.forEach((route) => {
-                route.fullPath = joinPath(prefix, route.fullPath || route.path)
+    '~updateRoutes'(router: e.Router, prefix: string = '') {
+        const routes = this['~getRoues'](router)
+        for (const route of routes) {
+            Object.assign(route, {
+                '~path': joinPath(
+                    joinPath(this['~prefix'], prefix),
+                    route['~path'],
+                ),
             })
-        }
-        const target = this.routes.at(-1)
-        if (target) {
-            target.fullPath = joinPath(prefix, target.fullPath || target.path)
         }
     }
 }
-
-export { Router }
