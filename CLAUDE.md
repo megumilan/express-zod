@@ -4,29 +4,41 @@ This file provides guidance to Claude Code (claude.ai/code) when working in this
 
 ## Project Overview
 
-**express-zod** is a type-safe, schema-validated routing library for Express and Zod v4. It uses Zod schemas to validate request inputs (params, query, body, headers, cookies) and infer response types at compile time.
+**express-zod** is a type-safe, schema-validated routing library for Express 5 and Zod v4. Zod schemas validate request inputs (params, query, body, headers, cookies) and drive the types a handler sees — including what it may hand back to be sent as the response.
 
 ## Monorepo Structure (pnpm workspaces)
 
-| Package               | Description                                                     |
-| --------------------- | --------------------------------------------------------------- |
-| `packages/core`       | Main `express-zod` package — `Router` and `Application` classes |
-| `packages/client`     | `@express-zod/client` — type-safe API client generator          |
-| `packages/openapi`    | `@express-zod/openapi` — OpenAPI/Scalar documentation           |
-| `packages/playground` | Interactive demo app (Vite + Tailwind + WebContainers)          |
+| Package               | Description                                             |
+| --------------------- | ------------------------------------------------------- |
+| `packages/core`       | Main `express-zod` package — the `Router` class         |
+| `packages/client`     | `@express-zod/client` — type-safe API client generator  |
+| `packages/openapi`    | `@express-zod/openapi` — OpenAPI/Scalar documentation   |
+| `packages/playground` | Interactive demo app (Vite + Tailwind + WebContainers)  |
+
+> `client` and `openapi` still import the pre-rewrite core API (`TRouteOptions`,
+> `TRouteRecord`, `TPlugin`, `TRoute`, `TRouteSchema`). Neither compiles against
+> the current `core` and both need updating before they can be built.
 
 ## Architecture
 
-- **`Router`** (`packages/core/src/router.ts`) — Core class wrapping Express Router. Supports `.get()`, `.post()`, `.put()`, `.patch()`, `.delete()`, `.head()`, `.options()`, `.all()`, `.use()`, and `.listen()`. Each route method is overloaded for type inference: passing a schema object infers `req.params`, `req.query`, `req.body`, and `res.json()` types.
-- **`Application`** (`packages/core/src/application.ts`) — Wraps Express app directly. **Note: this file was deleted in the current working tree**; check git history if needed.
-- **`schema-validator.ts`** — Runtime validation middleware that calls `schema.parse(req[key])` for each request-side schema (params, query, body, headers, cookies). Validation failures forward to `next(err)`.
-- **`types/router.ts`** — Core type definitions: `IRouteOptions`, `IRoute`, `IRouteRecord`, `IRouterOptions`, `RouteMethod`, `RouteHandler`, `AppendRoutes`, `UpdateRoutesPath`, `IPlugin`. These use heavy conditional/types from `type-fest` and `zod`.
-- **`types/utility.ts`** — Shared utility types: `MarkOptionalIfUndefined`, `IntelliSense`, `Mutable`, `NoExtraKeys`, `WhenUnexpected`.
-- **`utils/path.ts`** — `JoinPath` type and `joinPath` function for path concatenation.
+Everything below `packages/core/src` is the library. `index.ts` re-exports
+`./router` and the handler types.
 
-## Key Types Flow
+- **`router.ts`** — the whole public surface, types included. `Router<RouterOptions, Records>` exposes `.get .post .put .patch .delete .head .options .all .query`, `.use(...)` and `.listen`. Members prefixed `~` are internals: `~mount()` lazily builds the Express app, mounts the router under `~prefix` exactly once, and is what `listen` binds to; `~routes` returns the registered route metadata (`~path`, `~options`); `~register` and `~wrap` are the dispatch internals. `JoinPath` (type) and `joinPath` (runtime) sit together at the top — they have no shared implementation and can drift.
+- **`response.ts`** — `toResponse(handler, { autoNext })` adapts a handler whose **return value is the response** into an Express handler. Objects, arrays, strings, numbers and booleans all go through `res.json()` — never `res.send()`, so a number is never read as a status code. Special cases: Fetch `Response` (status, headers and each `set-cookie` are copied; encoding headers are dropped because `fetch` already decoded the body), Node streams and async iterables, `Buffer`, `null` (204, keeping a status the handler set itself) and `undefined`. It never rethrows, and calls `next()` from outside its `try` — Express 5's `router@2` both try/catches and attaches `.then(null, next)` to a returned thenable, so rethrowing forwards the same error twice.
+- **`schema-validator.ts`** — `schemaValidator(options)` returns an Express middleware that `safeParse`s `params`, `query`, `body`, `headers` and `cookies` in that fixed order, writes each parsed value back onto `req`, and forwards the `ZodError` on the first failure. Returns `null` when there is nothing to validate, and ignores any schema whose `.meta().skip` is set.
+- **`types/handler.ts`** — `IRequest`, `IResponse`, `RequestHandler`, `ErrorRequestHandler`. `ResponseBody` picks `responses[201]`, else `responses[200]`, else `unknown`.
+- **`types/utility.ts`** — `IntelliSense`, `NoExtraKeys`, `IsObject`, `IsFunction`.
 
-Route schemas map to TypeScript types via `InferOptions` → `InferRouteSchema` → `RouteHandler`. The `responses` key in `IRouteOptions` is not validated at runtime but drives `res.json()` typing and OpenAPI generation.
+### Key Types Flow
+
+`ISchema` names the schema keys a route may declare. `InferRouteOptions` maps each to its `z.output`, and `IRouteRegistrar` turns one call into an updated `Records`. Records are keyed by the **full path from the root**: `AddRoute` folds this router's own prefix into the key, so `use` only ever adds the *parent's* prefix — which is what lets prefixes compose recursively through any nesting depth.
+
+### Known rough edges
+
+- `use({ ... }, handler)` with an **inline** options literal does not infer `Options`, so `req.params` and friends degrade to `unknown`. Lift the schemas into a variable first. (The JSDoc on `use` shows the inline form, which does not work.)
+- Two annotated Express `ErrorRequestHandler`s cannot be passed to one `use` call — `IRequest<{}>['params']` is `unknown`, which is not assignable to Express's `ParamsDictionary`. Chain `.use(a).use(b)` instead.
+- Middleware registered through `use` never auto-calls `next()` (that is the `autoNext: false` above). Returning a value still short-circuits; returning `undefined` means the middleware owns the chain, exactly as in plain Express.
 
 ## Development Commands
 
@@ -42,16 +54,22 @@ pnpm --filter express-zod build        # core
 pnpm --filter @express-zod/client build  # client
 pnpm --filter @express-zod/openapi build # openapi
 
-# Run tests (from root or package)
-pnpm test
-pnpm --filter express-zod test
+# Tests — run them against packages/core
+# The repo root has no vitest config, so `pnpm test` from there loads these
+# test files without `globals: true` and fails with "describe is not defined".
+cd packages/core
+npx vitest run                # once
+npx vitest                    # watch
+npx vitest run --typecheck    # also collects the .test-d.ts assertions
+npx vitest --ui
+# …or, from anywhere:
+pnpm --filter express-zod exec vitest run
 
-# Run tests with UI
-pnpm test:ui
-pnpm --filter express-zod test:ui
+# A single test file
+cd packages/core && npx vitest run __test__/router.test.ts
 
-# Run a single test file (via vitest)
-npx vitest run packages/core/__test__/router.test-d.ts
+# Type-only check — fast, and covers both src and __test__
+cd packages/core && npx tsc --noEmit -p tsconfig.json
 
 # Lint
 pnpm lint
@@ -71,15 +89,18 @@ pnpm prepare
 
 ## Testing
 
-- **Vitest** with `globals: true` and `typecheck.enabled: true`.
-- Tests live in `packages/core/__test__/`. Type-level tests use `@vitest/typecheck` via `.test-d.ts` files.
-- The project uses `supertest` for HTTP integration testing.
+- **Vitest**, configured in `packages/core/vitest.config.ts`: `globals: true`, `typecheck.enabled: true`.
+- Runtime suites live in `packages/core/__test__/*.test.ts`; type assertions live beside them in `*.test-d.ts` using `expectTypeOf`.
+- `packages/core/tsconfig.json` includes `__test__`, so `npx tsc --noEmit -p tsconfig.json` type-checks the tests too — prefer it over vitest when only types changed.
+- Assertions in a `.test-d.ts` **must** be inside a `test()`/`describe()` block, or vitest never collects them. A file with no `test()` call reports both "No test suite found" and "Type Errors no errors", which reads like the typechecker is broken when it simply saw nothing.
+- HTTP tests use **supertest**. A test reaches the mounted app through `router['~mount']()`; nothing public exposes it, so the suites declare a small local `appOf` helper typed structurally (`{ '~mount': () => Express }`) to sidestep `Router<A, B>` variance.
+- Confirm a new type test actually fails before trusting it — flip an assertion and watch `npx vitest run --typecheck` go red.
 
 ## Linting & Formatting
 
-- **Biome** (`biome.json`) — linting and formatting. Configured with `preset: "recommended"`, single quotes, semicolons as needed.
-- **lint-staged** runs biome on staged files.
-- **Husky** pre-commit hook triggers lint-staged.
+- **Biome** (`biome.json`) — linting and formatting. `preset: "recommended"`, single quotes, semicolons as needed, with `noExplicitAny` and `noConfusingVoidType` turned off.
+- **lint-staged** runs `biome lint --error-on-warnings` (warnings fail the commit) plus `biome check`.
+- **Husky** pre-commit hook triggers lint-staged. Don't reach for `--no-verify`; fix the finding instead.
 
 ## Important Files
 
@@ -88,10 +109,10 @@ pnpm prepare
 - `tsconfig.base.json` — base TypeScript config (esnext, strict, bundler module resolution)
 - `tsdown.config.base.ts` — shared tsdown configuration
 - `biome.json` — biome lint/format config
-- `packages/core/src/router.ts` — main Router class (the most important file)
-- `packages/core/src/types/router.ts` — core type definitions
-- `packages/core/src/schema-validator.ts` — runtime validation
-- `packages/core/src/utils/path.ts` — path utilities
+- `packages/core/src/router.ts` — the `Router` class and every public type
+- `packages/core/src/response.ts` — handler return value → HTTP response
+- `packages/core/src/schema-validator.ts` — runtime validation middleware
+- `packages/core/src/types/handler.ts` — request/response and handler types
 
 ## Commit Convention
 
@@ -125,7 +146,8 @@ git add . && git commit -m "feat(core): support generic middleware
 
 ## Notes
 
-- The `sse.ts` module exists but was recently removed from the main flow (git history shows `feat(core): SSE support and test` commit).
-- `application.ts` and several test files were deleted in the working tree but remain in git history.
 - Node.js >= 24.12.0 is required (`engines` in root `package.json`).
-- TypeScript 6.0.3 is used; `verbatimModuleSyntax` and `exactOptionalPropertyTypes` are enabled.
+- TypeScript 5.9.3; `verbatimModuleSyntax` and `exactOptionalPropertyTypes` are enabled.
+- **`Application`, `sse.ts`, `utils/path.ts` and `types/router.ts` no longer exist.** The rewrite collapsed `Application` into `Router` (`listen` binds to the app `~mount()` builds) and dropped SSE, plugins and the `Application`/`Router` split. Check git history for the old shape.
+- **`packages/core/README.md` is stale.** It documents `Application`, `app.routes`, `routeOptions`, an `sse` option and a plugin system — none of which exist in `src/`. Don't treat it as a spec; read `src/router.ts`.
+- `.github/workflows/deploy-playground.yml` only builds and deploys the playground. There is no CI job running the tests.
