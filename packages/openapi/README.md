@@ -17,7 +17,7 @@ Peer dependency:
 ## Quick start
 
 ```ts
-import { InferOpenAPITags, openapi } from "@express-zod/openapi";
+import { openapi } from "@express-zod/openapi";
 import express from "express";
 import { Application, Router } from "express-zod";
 import { z } from "zod";
@@ -88,13 +88,6 @@ const app = new Application({ prefix: "/api" })
     .use(users);
 
 app.listen(3000);
-
-// Make meta.tags type-safe (see below)
-declare global {
-    namespace ExpressZodOpenAPI {
-        interface Tags extends InferOpenAPITags<typeof docs> {}
-    }
-}
 ```
 
 Then open your browser:
@@ -143,34 +136,12 @@ app.get(
 );
 ```
 
-`meta` accepts everything from `ZodOpenApiOperationObject` except `requestBody`, `responses`, `parameters`, `callbacks`, `requestParams` and `tags` (those are derived from the zod schemas). `tags` is re-enabled for type-safe tags (below).
-
-## Type-safe tags
-
-Declare the plugin's tags globally and `meta.tags` becomes fully typed:
-
-```ts
-const docs = openapi({
-    openapi: "3.0.1",
-    info: { title: "express-zod API", version: "0.0.1" },
-    tags: [{ name: "User" }],
-});
-
-declare global {
-    namespace ExpressZodOpenAPI {
-        interface Tags extends InferOpenAPITags<typeof docs> {}
-    }
-}
-```
-
-Using a tag that was never declared, e.g. `meta: { tags: ['Bogus'] }`, is then a compile-time error.
+`meta` accepts everything from `ZodOpenApiOperationObject` except `requestBody`, `responses`, `parameters`, `callbacks` and `requestParams` (those are derived from the zod schemas).
 
 ## API
 
 - `openapi(options)` — creates the plugin; install it with `app.use(docs)`.
-- `openapiTags` — unique symbol used to brand the plugin with its tags.
-- `TOpenAPIPlugin<Tags>` — plugin type carrying its declared tags.
-- `InferOpenAPITags<T>` / `InferOpenAPITagNames<T>` — extract declared tags from a plugin instance for the global declaration above.
+- `TOpenAPIPlugin` — the plugin type.
 
 ## License
 

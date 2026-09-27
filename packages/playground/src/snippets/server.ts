@@ -1,4 +1,4 @@
-import { type InferOpenAPITags, openapi } from '@express-zod/openapi'
+import { openapi } from '@express-zod/openapi'
 import cors from 'cors'
 import express from 'express'
 import { Application, Router } from 'express-zod'
@@ -43,7 +43,6 @@ const users = new Router({ prefix: '/users' })
             },
             meta: {
                 summary: 'List users',
-                /** Type-safe tags. see {@link ExpressZodOpenAPI.Tags} */
                 tags: ['User'],
             },
         },
@@ -102,10 +101,3 @@ app.listen(3000, () => {
 })
 
 export type App = typeof app
-
-declare global {
-    namespace ExpressZodOpenAPI {
-        // Define the Type-safe tags
-        interface Tags extends InferOpenAPITags<typeof docs> {}
-    }
-}

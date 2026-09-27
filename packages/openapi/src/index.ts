@@ -2,7 +2,7 @@
 
 import type { IPlugin, IRoute, ISchema } from 'express-zod'
 import { merge } from 'lodash-es'
-import type { Except, OmitIndexSignature } from 'type-fest'
+import type { Except } from 'type-fest'
 import type { ZodType } from 'zod'
 import {
     createDocument,
@@ -14,11 +14,6 @@ import {
 } from 'zod-openapi'
 
 declare global {
-    namespace ExpressZodOpenAPI {
-        interface Tags {
-            [K: string]: boolean
-        }
-    }
     namespace ExpressZod {
         interface RouteOptions {
             meta?: Except<
@@ -28,30 +23,21 @@ declare global {
                 | 'parameters'
                 | 'callbacks'
                 | 'requestParams'
-                | 'tags'
-            > & { tags?: EnabledTags[] }
+            >
         }
     }
 }
 
-type EnabledTags<
-    T extends
-        ExpressZodOpenAPI.Tags = OmitIndexSignature<ExpressZodOpenAPI.Tags>,
-> = {
-    [K in keyof T]: T[K] extends true ? K : never
-}[keyof T]
-
-interface TOpenAPIPath {
+interface IOpenAPIPath {
     json?: string
     ui?: string
 }
 
-interface TOpenAPIOptions<
-    Path extends TOpenAPIPath = Record<string, unknown>,
-    Tags = [],
+export interface IOpenAPIOptions<
+    Path extends IOpenAPIPath = Record<string, unknown>,
 > extends Except<ZodOpenApiObject, 'paths' | 'tags'> {
-    path?: Path | (TOpenAPIPath & {})
-    tags?: Tags | (TOpenAPITag[] & {})
+    path?: Path
+    tags?: TOpenAPITag[]
 }
 
 const paramsKeys = ['params', 'query', 'headers', 'cookies'] as const
@@ -161,7 +147,7 @@ function generateOpenapiPaths(routes: IRoute[]) {
 
 function docsJson(
     routes: IRoute[],
-    options: TOpenAPIOptions,
+    options: IOpenAPIOptions,
 ): ReturnType<typeof createDocument> {
     return createDocument({
         paths: generateOpenapiPaths(routes),
@@ -169,7 +155,7 @@ function docsJson(
     } as ZodOpenApiObject)
 }
 
-function ui(options: TOpenAPIOptions) {
+function ui(options: IOpenAPIOptions) {
     return `
 <!doctype html>
 <html>
@@ -211,21 +197,6 @@ interface TOpenAPITagBadge extends TOpenAPITagBase {
 
 type TOpenAPITag = TOpenAPITagNav | TOpenAPITagAudience | TOpenAPITagBadge
 
-export declare const openapiTags: unique symbol
-
-export type TOpenAPIPlugin<Tags extends TOpenAPITag[]> = IPlugin<{}> & {
-    readonly [openapiTags]?: Tags
-}
-
-export type InferOpenAPITags<T> =
-    T extends TOpenAPIPlugin<infer Tags>
-        ? {
-              [K in Tags[number]['name']]: true
-          }
-        : never
-
-export type InferOpenAPITagNames<T> = keyof InferOpenAPITags<T>
-
 const defaultOptions = {
     path: {
         json: '/openapi.json',
@@ -233,10 +204,9 @@ const defaultOptions = {
     },
 }
 
-function openapi<
-    const Path extends TOpenAPIPath = {},
-    const Tags extends TOpenAPITag[] = [],
->(options: TOpenAPIOptions<Path, Tags>): TOpenAPIPlugin<Tags> {
+export function openapi<const Path extends IOpenAPIPath = {}>(
+    options: IOpenAPIOptions<Path>,
+): IPlugin<{}> {
     options = merge({}, defaultOptions, options)
     if (options.path?.json === options.path?.ui) {
         throw new Error('OpenAPI JSON path and UI path cannot be the same')
@@ -256,5 +226,3 @@ function openapi<
         },
     }
 }
-
-export { openapi }
