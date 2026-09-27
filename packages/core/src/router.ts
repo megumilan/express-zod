@@ -1,6 +1,13 @@
 import type e from 'express'
 import express, { Router as ExpressRouter } from 'express'
-import type { IsAny, IsNever, Or, Simplify, Writable } from 'type-fest'
+import type {
+    IsAny,
+    IsNever,
+    OmitIndexSignature,
+    Or,
+    Simplify,
+    Writable,
+} from 'type-fest'
 import type { output, ZodObject, ZodType } from 'zod'
 import { toResponse } from './response'
 import { schemaValidator } from './schema-validator'
@@ -224,10 +231,13 @@ export interface IRouteRegistrar<
 }
 
 export interface IRoute extends e.IRoute {
-    /** Full path */
     '~path': string
-    /** Route options */
     '~options': IRouteOptions
+}
+
+export interface IPlugin<_Routes extends IRouteRecords = {}> {
+    readonly name: string
+    readonly install: (router: Router) => void
 }
 
 export class Router<
@@ -238,7 +248,9 @@ export class Router<
     '~prefix': string
     /** {@link e.Express Express} */
     '~express': e.Express | undefined
-    /** {@link e.Router Express Router} */
+    /**
+     * The root router of the routes mounted.
+     */
     '~router': e.Router
     '~mounted' = false
 
@@ -372,6 +384,22 @@ export class Router<
                   >
               >
         : this
+    /**
+     * Registers a router with prefix.
+     *
+     * Mounts the router and incorporates its route records into the current
+     * router's type, including the current router's prefix.
+     *
+     * @param router Router to mount.
+     *
+     * @example
+     * ```ts
+     * const users = new Router({ prefix: '/users' }).get('/', handler)
+     *
+     * const app = new Router({ prefix: '/api' }).use('/extra', users)
+     * // Routes include /api/extra/users
+     * ```
+     */
     use<const P extends string, R extends Router>(
         prefix: P,
         router: R,
@@ -389,8 +417,31 @@ export class Router<
                   >
               >
         : this
+    /**
+     * Registers a plugin.
+     *
+     * @param plugin The plugin.
+     */
+    use<const Plugin extends IPlugin>(
+        plugin: Plugin,
+    ): Plugin extends IPlugin<infer Routes>
+        ? Or<IsAny<Routes>, IsNever<Routes>> extends true
+            ? this
+            : Routes extends IRouteRecords
+              ? Router<
+                    RouterOptions,
+                    AddRoutes<
+                        Records,
+                        PrefixRecords<
+                            OmitIndexSignature<Routes>,
+                            PrefixOf<RouterOptions>
+                        >
+                    >
+                >
+              : this
+        : this
     use(
-        first?: IRouteOptions | AnyHandler | Router | string,
+        first?: IRouteOptions | AnyHandler | Router | string | IPlugin,
         ...rest: AnyHandler[]
     ): this {
         if (first instanceof Router) {
@@ -406,6 +457,16 @@ export class Router<
                 router['~router'],
             )
             this['~updateRoutes'](router['~router'], first)
+            return this
+        }
+
+        if (
+            typeof first === 'object' &&
+            'name' in first &&
+            'install' in first &&
+            typeof first.install === 'function'
+        ) {
+            first.install(this)
             return this
         }
 
