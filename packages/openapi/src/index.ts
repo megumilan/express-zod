@@ -1,7 +1,6 @@
 /// <reference types="zod-openapi" />
 
-import type { IRouter } from 'express'
-import type { TPlugin, TRoute, TRouteSchema } from 'express-zod'
+import type { IPlugin, IRoute, ISchema } from 'express-zod'
 import { merge } from 'lodash-es'
 import type { Except, OmitIndexSignature } from 'type-fest'
 import type { ZodType } from 'zod'
@@ -70,35 +69,33 @@ function isParamsKey(key: string): key is ParamsKey {
     return paramsKeys.includes(key as ParamsKey)
 }
 
-function toOpenapiSchema(schema: TRouteSchema) {
-    return Object.entries(schema).reduce((acc, [key, schema]) => {
-        if (!schema) {
+function toOpenapiSchema(schema: ISchema) {
+    return Object.entries(schema).reduce((acc, [key, value]) => {
+        if (!value) {
             return acc
         }
 
         if (isParamsKey(key)) {
             acc.requestParams ??= {}
-            acc.requestParams[paramsMap[key]] = schema
+            acc.requestParams[paramsMap[key]] = value
         }
 
         if (key === 'body') {
             acc.requestBody = {
                 content: {
                     'application/json': {
-                        schema,
+                        schema: value,
                     },
                 },
             }
         }
 
         if (key === 'responses') {
-            // biome-ignore lint/suspicious/noExplicitAny: <avoid>
-            const _responses = schema as Record<number, ZodType<any, any, any>>
+            const responses = value as Record<number, ZodType<any, any, any>>
 
-            acc.responses = Object.entries(_responses).reduce(
-                (acc, [key, schema]) => {
-                    const status = key as `${1 | 2 | 3 | 4 | 5}${string}`
-                    acc[status] = {
+            acc.responses = Object.entries(responses).reduce(
+                (acc, [status, schema]) => {
+                    acc[status as `${1 | 2 | 3 | 4 | 5}${string}`] = {
                         content: {
                             'application/json': {
                                 schema,
@@ -119,32 +116,51 @@ function toOpenapiPath(path: string) {
     return path?.replace(/\{?\/:([a-zA-Z0-9_]+)\}?/g, '/{$1}')
 }
 
-function generateOpenapiPaths(routes: TRoute[]) {
-    return Object.values(routes).reduce(
-        (acc, { fullPath, method, routeOptions }) => {
-            const { meta, ...rest } = routeOptions ?? {}
-            const schema = rest as TRouteSchema
-            const path = toOpenapiPath(fullPath)
-            if (path) {
-                if (acc[path]) {
-                    acc[path][method] = {
-                        ...meta,
-                        ...toOpenapiSchema(schema),
-                    } as ZodOpenApiOperationObject
-                } else {
-                    acc[path] ??= {
-                        [method]: { ...meta, ...toOpenapiSchema(schema) },
-                    }
-                }
-            }
-            return acc
-        },
-        {} as ZodOpenApiPathsObject,
-    )
+/** The HTTP methods an OpenAPI path item accepts. */
+const pathItemMethods = [
+    'get',
+    'put',
+    'post',
+    'delete',
+    'options',
+    'head',
+    'patch',
+    'trace',
+] as const
+
+/** The method a route was registered with, e.g. `get`. */
+function toOpenapiMethod(route: IRoute) {
+    const method = route.stack[0]?.method
+    return pathItemMethods.find((candidate) => candidate === method)
+}
+
+function generateOpenapiPaths(routes: IRoute[]) {
+    const paths: ZodOpenApiPathsObject = {}
+
+    for (const route of routes) {
+        const method = toOpenapiMethod(route)
+        const path = toOpenapiPath(route['~path'])
+
+        if (!method || !path) {
+            continue
+        }
+
+        const { meta, ...schema } = route['~options'] ?? {}
+
+        paths[path] = {
+            ...paths[path],
+            [method]: {
+                ...meta,
+                ...toOpenapiSchema(schema),
+            },
+        } as ZodOpenApiPathsObject[string]
+    }
+
+    return paths
 }
 
 function docsJson(
-    routes: TRoute[],
+    routes: IRoute[],
     options: TOpenAPIOptions,
 ): ReturnType<typeof createDocument> {
     return createDocument({
@@ -197,7 +213,7 @@ type TOpenAPITag = TOpenAPITagNav | TOpenAPITagAudience | TOpenAPITagBadge
 
 export declare const openapiTags: unique symbol
 
-export type TOpenAPIPlugin<Tags extends TOpenAPITag[]> = TPlugin & {
+export type TOpenAPIPlugin<Tags extends TOpenAPITag[]> = IPlugin<{}> & {
     readonly [openapiTags]?: Tags
 }
 
@@ -227,12 +243,12 @@ function openapi<
     }
     return {
         name: 'openapi',
-        install: ({ raw, instance }) => {
-            const app = raw as IRouter
+        install: (router) => {
+            const app = router['~mount']()
             const jsonPath = options.path?.json as string
             const uiPath = options.path?.ui as string
             app.get(jsonPath, (_, res) => {
-                res.json(docsJson(instance.routes, options as never))
+                res.json(docsJson(router['~routes'], options as never))
             })
             app.get(uiPath, (_, res) => {
                 res.type('html').send(ui(options as never))
