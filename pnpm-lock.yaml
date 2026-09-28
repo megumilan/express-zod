@@ -63,6 +63,9 @@ importers:
       express-zod:
         specifier: workspace:*
         version: link:../core
+      path-to-regexp:
+        specifier: ^8.4.2
+        version: 8.4.2
 
   packages/core:
     dependencies:
@@ -99,8 +102,8 @@ importers:
   packages/playground:
     dependencies:
       '@express-zod/client':
-        specifier: 0.0.1-alpha.2
-        version: 0.0.1-alpha.2(express-zod@packages+core)
+        specifier: workspace:*
+        version: link:../client
       '@express-zod/openapi':
         specifier: workspace:*
         version: link:../openapi
@@ -383,11 +386,6 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
-
-  '@express-zod/client@0.0.1-alpha.2':
-    resolution: {integrity: sha512-J/KhOXqTyaxWCxC1e8sPDGqBPutOmsksCJaP15fHmTUgJwG1T+heAe1YK2PiKecPPrBjTMf69b4GK3ddufsxKA==}
-    peerDependencies:
-      express-zod: '*'
 
   '@fontsource-variable/inter@5.3.0':
     resolution: {integrity: sha512-OupL48va4JNofb97w6NYeF9S7W/kHNKM0Er8Dem5nqi4jeOLrVJDoE8tZEpnMJmtkvNbB1EIPPwHcdkF6b1oUA==}
@@ -1864,11 +1862,6 @@ snapshots:
 
   '@esbuild/win32-x64@0.28.2':
     optional: true
-
-  '@express-zod/client@0.0.1-alpha.2(express-zod@packages+core)':
-    dependencies:
-      express-zod: link:packages/core
-      type-fest: 5.9.0
 
   '@fontsource-variable/inter@5.3.0': {}
 

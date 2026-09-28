@@ -237,6 +237,7 @@ export interface IRouteRegistrar<
 export interface IRoute extends e.IRoute {
     '~path': string
     '~options': IRouteOptions
+    '~prefix': string
 }
 
 export interface IPlugin<_Routes extends IRouteRecords = {}> {
@@ -534,7 +535,11 @@ export class Router<
                 ...(validation ? [validation] : []),
                 ...handlers.map((handler) => toResponse(handler)),
             )
-            this['~updateRoute'](joinPath(this['~prefix'], path), options)
+            this['~updateRoute'](
+                joinPath(this['~prefix'], path),
+                options,
+                this['~prefix'],
+            )
             return this
         }
         return register as unknown as IRouteRegistrar<
@@ -587,10 +592,11 @@ export class Router<
         return routes
     }
 
-    '~updateRoute'(path: string, options: IRouteOptions) {
+    '~updateRoute'(path: string, options: IRouteOptions, prefix: string = '') {
         const target = this['~routes'].at(-1)
         if (target) {
             target['~path'] = path
+            target['~prefix'] = prefix
             target['~options'] = options
         }
     }
